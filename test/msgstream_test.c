@@ -20,7 +20,7 @@ int main() {
     return 1;
 
   int8_t b42 = 0;
-  msgstream_size nread = msgstream_read(read_fd, &b42, sizeof(b42), stderr);
+  msgstream_size nread = msgstream_recv(read_fd, &b42, sizeof(b42), stderr);
   if (nread == -1)
     return 1;
 
@@ -30,7 +30,7 @@ int main() {
   }
 
   char hello[9] = {};
-  nread = msgstream_read(read_fd, hello, 8, stderr);
+  nread = msgstream_recv(read_fd, hello, 8, stderr);
   if (nread == -1)
     return 1;
 
@@ -40,7 +40,7 @@ int main() {
   }
 
   uint8_t huge[0x12345] = {};
-  nread = msgstream_read(read_fd, huge, sizeof(huge), stderr);
+  nread = msgstream_recv(read_fd, huge, sizeof(huge), stderr);
   if (nread == -1)
     return 1;
 
@@ -61,11 +61,11 @@ int main() {
 
 int child_main(int write_fd) {
   int8_t b42 = 42;
-  if (msgstream_write(write_fd, &b42, sizeof(b42), 1, stderr) == -1)
+  if (msgstream_send(write_fd, &b42, sizeof(b42), 1, stderr) == -1)
     return 1;
 
   char hello[8] = "hello";
-  if (msgstream_write(write_fd, hello, sizeof(hello), strlen(hello), stderr) ==
+  if (msgstream_send(write_fd, hello, sizeof(hello), strlen(hello), stderr) ==
       -1)
     return 1;
 
@@ -73,7 +73,7 @@ int child_main(int write_fd) {
   for (size_t i = 0; i < sizeof(huge); ++i)
     huge[i] = i % 256;
 
-  if (msgstream_write(write_fd, huge, sizeof(huge), sizeof(huge), stderr) == -1)
+  if (msgstream_send(write_fd, huge, sizeof(huge), sizeof(huge), stderr) == -1)
     return 1;
 
   return 0;

@@ -145,9 +145,9 @@ static msgstream_size read_header(msgstream_fd fd, msgstream_size buf_size,
   return msg_size;
 }
 
-msgstream_size msgstream_write(msgstream_fd fd, void *buf,
-                               msgstream_size buf_size, msgstream_size msg_size,
-                               FILE *err) {
+msgstream_size msgstream_send(msgstream_fd fd, void *buf,
+                              msgstream_size buf_size, msgstream_size msg_size,
+                              FILE *err) {
   assert(buf_size > 0);
 
   if (write_header(fd, buf_size, msg_size, err) == -1) {
@@ -162,7 +162,7 @@ msgstream_size msgstream_write(msgstream_fd fd, void *buf,
   return msg_size;
 }
 
-msgstream_size msgstream_read(msgstream_fd fd, void *buf,
+msgstream_size msgstream_recv(msgstream_fd fd, void *buf,
                               msgstream_size buf_size, FILE *err) {
   assert(buf_size > 0);
 
