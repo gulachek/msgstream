@@ -11,7 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "gulpachek": "file:~/Code/projects/gulpachek",
-    "gulpachek-c": "file:~/Code/projects/gulpachek-c"
+    "iheartmake": "^0.4.0",
+    "iheartmake-c": "^0.1.0"
   }
 }

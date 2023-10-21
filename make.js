@@ -1,5 +1,5 @@
-import { cli, Path } from "gulpachek";
-import { C, platformCompiler } from "gulpachek-c";
+import { cli, Path } from "iheartmake";
+import { C, platformCompiler } from "iheartmake-c";
 
 cli((book, opts) => {
   const c = new C(platformCompiler(), {
