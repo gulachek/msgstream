@@ -11,6 +11,7 @@ int fork_child();
 int join_child();
 
 // 1. write the byte 42 / success
+// 2. write 0 size msg / success
 // 2. write "hello" with buf size 8 / success
 // 3. write message of size 0x12345 with ordered bytes [0-n) / success
 
@@ -26,6 +27,15 @@ int main() {
 
   if (b42 != 42) {
     fprintf(stderr, "expected to read 42 but read %d\n", b42);
+    return 1;
+  }
+
+  nread = msgstream_recv(read_fd, &b42, sizeof(b42), stderr);
+  if (nread == -1)
+    return 1;
+
+  if (nread != 0) {
+    fprintf(stderr, "expected to read 0 bytes but read %lld\n", nread);
     return 1;
   }
 
@@ -62,6 +72,9 @@ int main() {
 int child_main(int write_fd) {
   int8_t b42 = 42;
   if (msgstream_send(write_fd, &b42, sizeof(b42), 1, stderr) == -1)
+    return 1;
+
+  if (msgstream_send(write_fd, &b42, sizeof(b42), 0, stderr) == -1)
     return 1;
 
   char hello[8] = "hello";
