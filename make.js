@@ -1,5 +1,5 @@
-import { cli, Path } from "iheartmake";
-import { C, platformCompiler } from "iheartmake-c";
+import { cli, Path } from "esmakefile";
+import { C, platformCompiler } from "esmakefile-c";
 
 cli((book, opts) => {
   const c = new C(platformCompiler(), {
