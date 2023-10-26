@@ -33,7 +33,7 @@ static msgstream_size write_header(msgstream_fd fd, msgstream_size buf_size,
               "Buffer size '%lld' is not large enough to fit message of size "
               "'%lld'\n",
               buf_size, msg_size);
-    return -1;
+    return MSGSTREAM_ERR;
   }
 
   uint8_t buf[256];
@@ -44,7 +44,7 @@ static msgstream_size write_header(msgstream_fd fd, msgstream_size buf_size,
           err,
           "msgstream header size of '%lu' is too big. must fit in one byte\n",
           nheader);
-    return -1;
+    return MSGSTREAM_ERR;
   }
 
   // first part is header size
@@ -63,7 +63,7 @@ static msgstream_size write_header(msgstream_fd fd, msgstream_size buf_size,
 
   if (write(fd, buf, nheader) == -1) {
     fperror(err, "error writing msgstream header");
-    return -1;
+    return MSGSTREAM_ERR;
   }
 
   return nheader;
@@ -71,21 +71,27 @@ static msgstream_size write_header(msgstream_fd fd, msgstream_size buf_size,
 
 static msgstream_size readn(msgstream_fd fd, void *buf, msgstream_size nbytes,
                             FILE *err) {
+  int expect_eof = 1;
   msgstream_size nread = 0;
   while (nbytes > nread) {
     ssize_t n = read(fd, buf + nread, nbytes - nread);
     if (n == -1) {
       fperror(err, "read");
-      return -1;
+      return MSGSTREAM_ERR;
     }
 
     if (n == 0) {
-      if (err)
-        fprintf(err, "Unexpected eof\n");
-      return -1;
+      if (expect_eof) {
+        return MSGSTREAM_EOF;
+      } else {
+        if (err)
+          fprintf(err, "Unexpected eof\n");
+        return MSGSTREAM_ERR;
+      }
     }
 
     nread += n;
+    expect_eof = 0;
   }
 
   return nbytes;
@@ -100,25 +106,19 @@ static msgstream_size read_header(msgstream_fd fd, msgstream_size buf_size,
           err,
           "msgstream header size of '%lu' is too big. must fit in one byte\n",
           nheader);
-    return -1;
+    return MSGSTREAM_ERR;
   }
-
-  const char *err_read = "error reading msgstream header";
-  const char *err_eof = "Unexpected eof while reading msgstream header";
 
   // read once to validate header size match
   uint8_t buf[256];
   int nread = read(fd, buf, nheader);
   if (nread == -1) {
-    fperror(err, err_read);
-    return -1;
+    fperror(err, "error reading msgstream header");
+    return MSGSTREAM_ERR;
   }
 
-  if (nread == 0) {
-    if (err)
-      fprintf(err, "%s\n", err_eof);
-    return -1;
-  }
+  if (nread == 0)
+    return MSGSTREAM_EOF;
 
   if (buf[0] != nheader) {
     if (err)
@@ -126,13 +126,19 @@ static msgstream_size read_header(msgstream_fd fd, msgstream_size buf_size,
               "Received unexpected msgstream header size. Expected '%lu' but "
               "received '%d'\n",
               nheader, buf[0]);
-    return -1;
+    return MSGSTREAM_ERR;
   }
 
-  if (readn(fd, buf + nread, nheader - nread, err) == -1) {
-    if (err)
+  msgstream_size msg_nread = readn(fd, buf + nread, nheader - nread, err);
+  if (msg_nread < 0) {
+    if (err) {
+      if (msg_nread == MSGSTREAM_EOF)
+        fprintf(err, "Unexpected eof\n");
+
       fprintf(err, "Failed to complete reading the msgstream header\n");
-    return -1;
+    }
+
+    return MSGSTREAM_ERR;
   }
 
   msgstream_size msg_size = 0;
@@ -150,13 +156,13 @@ msgstream_size msgstream_send(msgstream_fd fd, void *buf,
                               FILE *err) {
   assert(buf_size > 0);
 
-  if (write_header(fd, buf_size, msg_size, err) == -1) {
-    return -1;
+  if (write_header(fd, buf_size, msg_size, err) == MSGSTREAM_ERR) {
+    return MSGSTREAM_ERR;
   }
 
-  if (write(fd, buf, msg_size) == -1) {
+  if (write(fd, buf, msg_size) == MSGSTREAM_ERR) {
     fperror(err, "error writing msgstream body");
-    return -1;
+    return MSGSTREAM_ERR;
   }
 
   return msg_size;
@@ -167,17 +173,18 @@ msgstream_size msgstream_recv(msgstream_fd fd, void *buf,
   assert(buf_size > 0);
 
   msgstream_size msg_size = read_header(fd, buf_size, err);
-  if (msg_size == -1) {
-    return -1;
-  }
+  if (msg_size <= 0)
+    return msg_size;
 
-  if (msg_size == 0)
-    return 0;
+  msgstream_size body_size = readn(fd, buf, msg_size, err);
+  if (body_size < 0) {
+    if (err) {
+      if (body_size == MSGSTREAM_EOF)
+        fprintf(err, "Unexpected eof\n");
 
-  if (readn(fd, buf, msg_size, err) == -1) {
-    if (err)
       fprintf(err, "Failed to read msgstream body\n");
-    return -1;
+    }
+    return MSGSTREAM_ERR;
   }
 
   return msg_size;

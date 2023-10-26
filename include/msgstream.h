@@ -7,6 +7,9 @@
 typedef int msgstream_fd;
 typedef int64_t msgstream_size;
 
+#define MSGSTREAM_ERR -1
+#define MSGSTREAM_EOF -2
+
 msgstream_size msgstream_send(msgstream_fd fd, void *buf,
                               msgstream_size buf_size, msgstream_size msg_size,
                               FILE *err);

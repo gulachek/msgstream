@@ -14,6 +14,7 @@ int join_child();
 // 2. write 0 size msg / success
 // 2. write "hello" with buf size 8 / success
 // 3. write message of size 0x12345 with ordered bytes [0-n) / success
+// 4. close connection is eof
 
 int main() {
   int read_fd = fork_child();
@@ -22,7 +23,7 @@ int main() {
 
   int8_t b42 = 0;
   msgstream_size nread = msgstream_recv(read_fd, &b42, sizeof(b42), stderr);
-  if (nread == -1)
+  if (nread < 0)
     return 1;
 
   if (b42 != 42) {
@@ -31,17 +32,17 @@ int main() {
   }
 
   nread = msgstream_recv(read_fd, &b42, sizeof(b42), stderr);
-  if (nread == -1)
+  if (nread < 0)
     return 1;
 
-  if (nread != 0) {
+  if (nread < 0) {
     fprintf(stderr, "expected to read 0 bytes but read %lld\n", nread);
     return 1;
   }
 
   char hello[9] = {};
   nread = msgstream_recv(read_fd, hello, 8, stderr);
-  if (nread == -1)
+  if (nread < 0)
     return 1;
 
   if (strncmp(hello, "hello", nread) != 0) {
@@ -51,7 +52,7 @@ int main() {
 
   uint8_t huge[0x12345] = {};
   nread = msgstream_recv(read_fd, huge, sizeof(huge), stderr);
-  if (nread == -1)
+  if (nread < 0)
     return 1;
 
   for (size_t i = 0; i < 0x12345; ++i) {
@@ -59,6 +60,13 @@ int main() {
       fprintf(stderr, "Error reading huge msg at index %lu\n", i);
       return 1;
     }
+  }
+
+  // read EOF
+  nread = msgstream_recv(read_fd, hello, sizeof(hello), stderr);
+  if (nread != MSGSTREAM_EOF) {
+    fprintf(stderr, "Expected nread=EOF but got %lld\n", nread);
+    return 1;
   }
 
   if (join_child() == -1) {
@@ -88,6 +96,9 @@ int child_main(int write_fd) {
 
   if (msgstream_send(write_fd, huge, sizeof(huge), sizeof(huge), stderr) == -1)
     return 1;
+
+  // close connection
+  close(write_fd);
 
   return 0;
 }
