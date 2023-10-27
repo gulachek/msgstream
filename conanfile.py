@@ -10,7 +10,7 @@ class BasicConanfile(ConanFile):
     homepage = "https://gulachek.com"
 
     def source(self):
-        self.run("git clone ~/Code/projects/msgstream")
+        self.run("git clone git@github.com:gulachek/msgstream.git")
 
     def requirements(self):
         pass
