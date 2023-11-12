@@ -4,7 +4,7 @@ from os.path import join
 
 class BasicConanfile(ConanFile):
     name = "msgstream"
-    version = "0.2.0"
+    version = "0.2.1"
     description = "Write messages with boundaries to streams"
     license = "MIT"
     homepage = "https://gulachek.com"
