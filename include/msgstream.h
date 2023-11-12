@@ -32,6 +32,21 @@ extern "C" {
 MSGSTREAM_API msgstream_size msgstream_header_size(size_t buf_size, FILE *err);
 
 /**
+ * Encode a message header into a buffer
+ * @param header_buf The buffer in which to encode the header
+ * @param header_buf_size The size of header_buf in bytes
+ * @param msg_buf_size The size of the buffer receiving the message
+ * @param msg_size The size of the message whose header is being encoded
+ * @param err Optional stream to write error messages to
+ * @return The size of the encoded header in bytes (msgstream_header_size)
+ */
+MSGSTREAM_API msgstream_size msgstream_encode_header(void *header_buf,
+                                                     size_t header_buf_size,
+                                                     size_t msg_buf_size,
+                                                     msgstream_size msg_size,
+                                                     FILE *err);
+
+/**
  * Send a message over a file descriptor
  * @param fd The file decriptor to write the message to
  * @param buf A buffer holding the message to be sent

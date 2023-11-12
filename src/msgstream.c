@@ -41,27 +41,32 @@ msgstream_size msgstream_header_size(size_t buf_size, FILE *err) {
   return out;
 }
 
-static msgstream_size write_header(msgstream_fd fd, msgstream_size buf_size,
-                                   msgstream_size msg_size, FILE *err) {
-  if (msg_size > buf_size) {
+msgstream_size msgstream_encode_header(void *header_buf, size_t header_buf_size,
+                                       size_t msg_buf_size,
+                                       msgstream_size msg_size, FILE *err) {
+  if (msg_size > msg_buf_size) {
     if (err)
       fprintf(err,
-              "Buffer size '%lld' is not large enough to fit message of size "
+              "Buffer size '%lu' is not large enough to fit message of size "
               "'%lld'\n",
-              buf_size, msg_size);
+              msg_buf_size, msg_size);
     return MSGSTREAM_ERR;
   }
 
-  uint8_t buf[256];
-  size_t nheader = msgstream_header_size(buf_size, err);
-  if (nheader > 0xff) {
+  size_t nheader = msgstream_header_size(msg_buf_size, err);
+  if (nheader < 0)
+    return MSGSTREAM_ERR;
+
+  if (nheader > header_buf_size) {
     if (err)
-      fprintf(
-          err,
-          "msgstream header size of '%lu' is too big. must fit in one byte\n",
-          nheader);
+      fprintf(err,
+              "msgstream header buf of size '%lu' is too small to fit header "
+              "of size '%lu'\n",
+              header_buf_size, nheader);
     return MSGSTREAM_ERR;
   }
+
+  uint8_t *buf = (uint8_t *)header_buf;
 
   // first part is header size
   buf[0] = (uint8_t)nheader;
@@ -76,11 +81,6 @@ static msgstream_size write_header(msgstream_fd fd, msgstream_size buf_size,
 
   for (; i < nheader; ++i)
     buf[i] = 0;
-
-  if (write(fd, buf, nheader) == -1) {
-    fperror(err, "error writing msgstream header");
-    return MSGSTREAM_ERR;
-  }
 
   return nheader;
 }
@@ -172,11 +172,23 @@ msgstream_size msgstream_send(msgstream_fd fd, const void *buf,
                               FILE *err) {
   assert(buf_size > 0);
 
-  if (write_header(fd, buf_size, msg_size, err) == MSGSTREAM_ERR) {
+  uint8_t header_buf[MSGSTREAM_HEADER_BUF_SIZE];
+  msgstream_size header_size = msgstream_encode_header(
+      header_buf, sizeof(header_buf), buf_size, msg_size, err);
+
+  if (header_size < 0) {
+    if (err)
+      fprintf(err, "Error encoding msgstream header\n");
     return MSGSTREAM_ERR;
   }
 
-  if (write(fd, buf, msg_size) == MSGSTREAM_ERR) {
+  // TODO - one system call?
+  if (write(fd, header_buf, header_size) == -1) {
+    fperror(err, "error writing msgstream header");
+    return MSGSTREAM_ERR;
+  }
+
+  if (write(fd, buf, msg_size) == -1) {
     fperror(err, "error writing msgstream body");
     return MSGSTREAM_ERR;
   }

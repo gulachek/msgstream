@@ -145,4 +145,59 @@ BOOST_AUTO_TEST_CASE(NineByteHeader){DO_TEST(0x100000000000000, 9)
 #undef EXPAND
 #undef DO_TEST
 
+BOOST_AUTO_TEST_SUITE_END() // header_size
+
+    BOOST_AUTO_TEST_SUITE(encode_header)
+
+        BOOST_AUTO_TEST_CASE(EmptyBufferIsMeaninglessAndErrors) {
+  uint8_t header_buf[MSGSTREAM_HEADER_BUF_SIZE];
+  auto ret =
+      msgstream_encode_header(header_buf, sizeof(header_buf), 0, 0, NULL);
+  BOOST_TEST(ret < 0);
+}
+
+BOOST_AUTO_TEST_CASE(MsgSizeLargerThanBufSizeIsError) {
+  uint8_t header_buf[MSGSTREAM_HEADER_BUF_SIZE];
+  auto ret =
+      msgstream_encode_header(header_buf, sizeof(header_buf), 1, 2, NULL);
+  BOOST_TEST(ret < 0);
+}
+
+BOOST_AUTO_TEST_CASE(HeaderBufTooSmallIsError) {
+  uint8_t header_buf[1]; // too small for 2 byte header
+  auto ret =
+      msgstream_encode_header(header_buf, sizeof(header_buf), 1, 1, NULL);
+  BOOST_TEST(ret < 0);
+}
+
+BOOST_AUTO_TEST_CASE(EncodesSingleByteMessageHeaderAsTwoBytes) {
+  char header_buf[MSGSTREAM_HEADER_BUF_SIZE];
+  auto ret =
+      msgstream_encode_header(header_buf, sizeof(header_buf), 1, 1, NULL);
+  BOOST_TEST(ret == 2);
+
+  std::string_view header{header_buf, header_buf + ret};
+  BOOST_TEST(header == "\x02\x01");
+}
+
+BOOST_AUTO_TEST_CASE(EncodesMultiByteHeaderWithLittleEndianMsgSize) {
+  char header_buf[MSGSTREAM_HEADER_BUF_SIZE];
+  auto ret = msgstream_encode_header(header_buf, sizeof(header_buf), 0xffffffff,
+                                     0x04030201, NULL);
+  BOOST_TEST(ret == 5);
+
+  std::string_view header{header_buf, header_buf + ret};
+  BOOST_TEST(header == "\x05\x01\x02\x03\x04");
+}
+
+BOOST_AUTO_TEST_CASE(EncodesNineByteHeaderWithLittleEndianMsgSize) {
+  char header_buf[MSGSTREAM_HEADER_BUF_SIZE];
+  auto ret =
+      msgstream_encode_header(header_buf, sizeof(header_buf),
+                              0xffffffffffffffff, 0x0807060504030201, NULL);
+  BOOST_TEST(ret == 9);
+
+  std::string_view header{header_buf, header_buf + ret};
+  BOOST_TEST(header == "\x09\x01\x02\x03\x04\x05\x06\x07\x08");
+}
 BOOST_AUTO_TEST_SUITE_END() // encode_header
