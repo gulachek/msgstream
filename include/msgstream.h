@@ -13,6 +13,8 @@
 typedef int msgstream_fd;
 typedef int64_t msgstream_size;
 
+#define MSGSTREAM_HEADER_BUF_SIZE 9
+
 #define MSGSTREAM_ERR -1
 #define MSGSTREAM_EOF -2
 
@@ -20,10 +22,38 @@ typedef int64_t msgstream_size;
 extern "C" {
 #endif
 
-MSGSTREAM_API msgstream_size msgstream_send(msgstream_fd fd, void *buf,
+/**
+ * Determine how many bytes a message header will be given the message buffer
+ * size.
+ * @param buf_size The size of the message buffer in bytes
+ * @param err An optional stream to write error messages to
+ * @return The number of bytes to read for the associated message's header
+ */
+MSGSTREAM_API msgstream_size msgstream_header_size(msgstream_size buf_size,
+                                                   FILE *err);
+
+/**
+ * Send a message over a file descriptor
+ * @param fd The file decriptor to write the message to
+ * @param buf A buffer holding the message to be sent
+ * @param buf_size The size of the buffer in bytes
+ * @param msg_size The size of the message in bytes (<= buf_size)
+ * @param err An optional stream to write error messages to
+ * @return msg_size on success and a negative value on failure
+ */
+MSGSTREAM_API msgstream_size msgstream_send(msgstream_fd fd, const void *buf,
                                             msgstream_size buf_size,
                                             msgstream_size msg_size, FILE *err);
 
+/**
+ * Receive a message over a file descriptor
+ * @param fd The file decriptor to read the message from
+ * @param buf A buffer to hold the received message
+ * @param buf_size The size of the buffer in bytes
+ * @param err An optional stream to write error messages to
+ * @return The size of the received message  on success and a negative value on
+ * failure
+ */
 MSGSTREAM_API msgstream_size msgstream_recv(msgstream_fd, void *buf,
                                             msgstream_size buf_size, FILE *err);
 

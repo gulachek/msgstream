@@ -15,7 +15,13 @@ static void fperror(FILE *err, const char *s) {
     fprintf(err, "%s\n", msg);
 }
 
-static size_t header_size(msgstream_size buf_size) {
+msgstream_size msgstream_header_size(msgstream_size buf_size, FILE *err) {
+  if (buf_size < 1) {
+    if (err)
+      fprintf(err, "Message buffer must be at least 1 byte large\n");
+    return MSGSTREAM_ERR;
+  }
+
   size_t nbytes = 0;
   while (buf_size > 0) {
     buf_size /= 256;
@@ -37,7 +43,7 @@ static msgstream_size write_header(msgstream_fd fd, msgstream_size buf_size,
   }
 
   uint8_t buf[256];
-  size_t nheader = header_size(buf_size);
+  size_t nheader = msgstream_header_size(buf_size, err);
   if (nheader > 0xff) {
     if (err)
       fprintf(
@@ -99,7 +105,7 @@ static msgstream_size readn(msgstream_fd fd, void *buf, msgstream_size nbytes,
 
 static msgstream_size read_header(msgstream_fd fd, msgstream_size buf_size,
                                   FILE *err) {
-  size_t nheader = header_size(buf_size);
+  size_t nheader = msgstream_header_size(buf_size, err);
   if (nheader > 0xff) {
     if (err)
       fprintf(
@@ -151,7 +157,7 @@ static msgstream_size read_header(msgstream_fd fd, msgstream_size buf_size,
   return msg_size;
 }
 
-msgstream_size msgstream_send(msgstream_fd fd, void *buf,
+msgstream_size msgstream_send(msgstream_fd fd, const void *buf,
                               msgstream_size buf_size, msgstream_size msg_size,
                               FILE *err) {
   assert(buf_size > 0);

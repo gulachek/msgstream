@@ -107,3 +107,47 @@ BOOST_FIXTURE_TEST_CASE(TransferHugeMessage, f) {
     }
   }
 }
+
+BOOST_AUTO_TEST_SUITE(header_size)
+
+#define EXPAND(X) X
+
+#define DO_TEST(BUF_SZ, RET)                                                   \
+  auto b##BUF_SZ = msgstream_header_size(BUF_SZ, NULL);                        \
+  BOOST_TEST(EXPAND(b##BUF_SZ) == RET);
+
+BOOST_AUTO_TEST_CASE(EmptyBufferIsMeaninglessAndErrors) {
+  auto ret = msgstream_header_size(0, NULL);
+  BOOST_TEST(ret < 0);
+}
+
+BOOST_AUTO_TEST_CASE(MaxSizetIsErrorDueToSignedType) {
+  auto ret = msgstream_header_size(0xffffffffffffffff, NULL);
+  BOOST_TEST(ret < 0);
+}
+
+BOOST_AUTO_TEST_CASE(TwoByteHeader){DO_TEST(0x1, 2) DO_TEST(0xff, 2)}
+
+BOOST_AUTO_TEST_CASE(ThreeByteHeader){DO_TEST(0x100, 3) DO_TEST(0xffff, 3)}
+
+BOOST_AUTO_TEST_CASE(FourByteHeader){DO_TEST(0x10000, 4) DO_TEST(0xffffff, 4)}
+
+BOOST_AUTO_TEST_CASE(FiveByteHeader){DO_TEST(0x1000000, 5)
+                                         DO_TEST(0xffffffff, 5)}
+
+BOOST_AUTO_TEST_CASE(SixByteHeader){DO_TEST(0x100000000, 6)
+                                        DO_TEST(0xffffffffff, 6)}
+
+BOOST_AUTO_TEST_CASE(SevenByteHeader){DO_TEST(0x10000000000, 7)
+                                          DO_TEST(0xffffffffffff, 7)}
+
+BOOST_AUTO_TEST_CASE(EightByteHeader){DO_TEST(0x1000000000000, 8)
+                                          DO_TEST(0xffffffffffffff, 8)}
+
+BOOST_AUTO_TEST_CASE(NineByteHeader){DO_TEST(0x100000000000000, 9)
+                                         DO_TEST(0x7fffffffffffffff, 9)}
+
+#undef EXPAND
+#undef DO_TEST
+
+BOOST_AUTO_TEST_SUITE_END() // encode_header
