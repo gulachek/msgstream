@@ -113,53 +113,22 @@ static msgstream_size readn(msgstream_fd fd, void *buf, msgstream_size nbytes,
   return nbytes;
 }
 
-static msgstream_size read_header(msgstream_fd fd, msgstream_size buf_size,
-                                  FILE *err) {
-  size_t nheader = msgstream_header_size(buf_size, err);
-  if (nheader > 0xff) {
-    if (err)
-      fprintf(
-          err,
-          "msgstream header size of '%lu' is too big. must fit in one byte\n",
-          nheader);
-    return MSGSTREAM_ERR;
-  }
+msgstream_size msgstream_decode_header(const void *header_buf,
+                                       size_t header_size, FILE *err) {
+  const uint8_t *buf = (const uint8_t *)header_buf;
 
-  // read once to validate header size match
-  uint8_t buf[256];
-  int nread = read(fd, buf, nheader);
-  if (nread == -1) {
-    fperror(err, "error reading msgstream header");
-    return MSGSTREAM_ERR;
-  }
-
-  if (nread == 0)
-    return MSGSTREAM_EOF;
-
-  if (buf[0] != nheader) {
+  if (buf[0] != header_size) {
     if (err)
       fprintf(err,
               "Received unexpected msgstream header size. Expected '%lu' but "
               "received '%d'\n",
-              nheader, buf[0]);
-    return MSGSTREAM_ERR;
-  }
-
-  msgstream_size msg_nread = readn(fd, buf + nread, nheader - nread, err);
-  if (msg_nread < 0) {
-    if (err) {
-      if (msg_nread == MSGSTREAM_EOF)
-        fprintf(err, "Unexpected eof\n");
-
-      fprintf(err, "Failed to complete reading the msgstream header\n");
-    }
-
+              header_size, buf[0]);
     return MSGSTREAM_ERR;
   }
 
   msgstream_size msg_size = 0;
   msgstream_size mult = 1;
-  for (size_t i = 1; i < nheader; ++i) {
+  for (size_t i = 1; i < header_size; ++i) {
     msg_size += mult * buf[i];
     mult *= 256;
   }
@@ -200,7 +169,22 @@ msgstream_size msgstream_recv(msgstream_fd fd, void *buf,
                               msgstream_size buf_size, FILE *err) {
   assert(buf_size > 0);
 
-  msgstream_size msg_size = read_header(fd, buf_size, err);
+  msgstream_size nheader = msgstream_header_size(buf_size, err);
+  if (nheader < 0)
+    return MSGSTREAM_ERR;
+
+  uint8_t header_buf[MSGSTREAM_HEADER_BUF_SIZE];
+  msgstream_size nheader_ret = readn(fd, header_buf, nheader, err);
+  if (nheader_ret < 0) {
+    if (nheader_ret == MSGSTREAM_EOF)
+      return MSGSTREAM_EOF;
+
+    if (err)
+      fprintf(err, "Failed to read msgstream header\n");
+    return MSGSTREAM_ERR;
+  }
+
+  msgstream_size msg_size = msgstream_decode_header(header_buf, nheader, err);
   if (msg_size <= 0)
     return msg_size;
 

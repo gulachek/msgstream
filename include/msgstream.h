@@ -47,6 +47,18 @@ MSGSTREAM_API msgstream_size msgstream_encode_header(void *header_buf,
                                                      FILE *err);
 
 /**
+ * Decode a message header into a message size
+ * @param header_buf The buffer holding the header to decode
+ * @param header_size The size of header_in bytes obtained from
+ * msgstream_header_size
+ * @param err Optional stream to write error messages to
+ * @return The size of the message body associated with the header
+ */
+MSGSTREAM_API msgstream_size msgstream_decode_header(const void *header_buf,
+                                                     size_t header_size,
+                                                     FILE *err);
+
+/**
  * Send a message over a file descriptor
  * @param fd The file decriptor to write the message to
  * @param buf A buffer holding the message to be sent

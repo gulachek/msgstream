@@ -147,7 +147,7 @@ BOOST_AUTO_TEST_CASE(NineByteHeader){DO_TEST(0x100000000000000, 9)
 
 BOOST_AUTO_TEST_SUITE_END() // header_size
 
-    BOOST_AUTO_TEST_SUITE(encode_header)
+    BOOST_AUTO_TEST_SUITE(EncodeHeader)
 
         BOOST_AUTO_TEST_CASE(EmptyBufferIsMeaninglessAndErrors) {
   uint8_t header_buf[MSGSTREAM_HEADER_BUF_SIZE];
@@ -201,3 +201,37 @@ BOOST_AUTO_TEST_CASE(EncodesNineByteHeaderWithLittleEndianMsgSize) {
   BOOST_TEST(header == "\x09\x01\x02\x03\x04\x05\x06\x07\x08");
 }
 BOOST_AUTO_TEST_SUITE_END() // encode_header
+
+BOOST_AUTO_TEST_SUITE(DecodeHeader)
+
+BOOST_AUTO_TEST_CASE(FirstByteMismatchWithHeaderSizeIsError) {
+  uint8_t header_buf[] = {0x01, 0x02}; // header size first byte is invalid
+  auto msg_size = msgstream_decode_header(header_buf, sizeof(header_buf), NULL);
+  BOOST_TEST(msg_size < 0);
+}
+
+BOOST_AUTO_TEST_CASE(ReturnsEmptyMessageSizeAsZero) {
+  uint8_t header_buf[] = {0x02, 0x00};
+  auto msg_size = msgstream_decode_header(header_buf, sizeof(header_buf), NULL);
+  BOOST_TEST(msg_size == 0);
+}
+
+BOOST_AUTO_TEST_CASE(ReturnsSingleByteMessageSize) {
+  uint8_t header_buf[] = {0x02, 0xa1};
+  auto msg_size = msgstream_decode_header(header_buf, sizeof(header_buf), NULL);
+  BOOST_TEST(msg_size == 0xa1);
+}
+
+BOOST_AUTO_TEST_CASE(ReturnsFourByteMessageSizeFromLittleEndian) {
+  uint8_t header_buf[] = {0x05, 0x01, 0x02, 0x03, 0x04};
+  auto msg_size = msgstream_decode_header(header_buf, sizeof(header_buf), NULL);
+  BOOST_TEST(msg_size == 0x04030201);
+}
+
+BOOST_AUTO_TEST_CASE(ReturnsEightByteMessageSizeFromLittleEndian) {
+  uint8_t header_buf[] = {0x09, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
+  auto msg_size = msgstream_decode_header(header_buf, sizeof(header_buf), NULL);
+  BOOST_TEST(msg_size == 0x0807060504030201);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
