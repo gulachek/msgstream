@@ -121,11 +121,6 @@ BOOST_AUTO_TEST_CASE(EmptyBufferIsMeaninglessAndErrors) {
   BOOST_TEST(ret < 0);
 }
 
-BOOST_AUTO_TEST_CASE(MaxSizetIsErrorDueToSignedType) {
-  auto ret = msgstream_header_size(0xffffffffffffffff, NULL);
-  BOOST_TEST(ret < 0);
-}
-
 BOOST_AUTO_TEST_CASE(TwoByteHeader){DO_TEST(0x1, 2) DO_TEST(0xff, 2)}
 
 BOOST_AUTO_TEST_CASE(ThreeByteHeader){DO_TEST(0x100, 3) DO_TEST(0xffff, 3)}
@@ -145,7 +140,7 @@ BOOST_AUTO_TEST_CASE(EightByteHeader){DO_TEST(0x1000000000000, 8)
                                           DO_TEST(0xffffffffffffff, 8)}
 
 BOOST_AUTO_TEST_CASE(NineByteHeader){DO_TEST(0x100000000000000, 9)
-                                         DO_TEST(0x7fffffffffffffff, 9)}
+                                         DO_TEST(0xffffffffffffffff, 9)}
 
 #undef EXPAND
 #undef DO_TEST

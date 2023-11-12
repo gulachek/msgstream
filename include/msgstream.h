@@ -29,8 +29,7 @@ extern "C" {
  * @param err An optional stream to write error messages to
  * @return The number of bytes to read for the associated message's header
  */
-MSGSTREAM_API msgstream_size msgstream_header_size(msgstream_size buf_size,
-                                                   FILE *err);
+MSGSTREAM_API msgstream_size msgstream_header_size(size_t buf_size, FILE *err);
 
 /**
  * Send a message over a file descriptor

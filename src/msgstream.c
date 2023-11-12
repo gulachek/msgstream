@@ -15,7 +15,7 @@ static void fperror(FILE *err, const char *s) {
     fprintf(err, "%s\n", msg);
 }
 
-msgstream_size msgstream_header_size(msgstream_size buf_size, FILE *err) {
+msgstream_size msgstream_header_size(size_t buf_size, FILE *err) {
   if (buf_size < 1) {
     if (err)
       fprintf(err, "Message buffer must be at least 1 byte large\n");
@@ -28,7 +28,17 @@ msgstream_size msgstream_header_size(msgstream_size buf_size, FILE *err) {
     nbytes += 1;
   }
 
-  return 1 + nbytes;
+  size_t out = 1 + nbytes;
+  if (out > MSGSTREAM_HEADER_BUF_SIZE) {
+    if (err)
+      fprintf(
+          err,
+          "Message header would be too big for a message buffer of size %lu\n",
+          buf_size);
+    return MSGSTREAM_ERR;
+  }
+
+  return out;
 }
 
 static msgstream_size write_header(msgstream_fd fd, msgstream_size buf_size,
