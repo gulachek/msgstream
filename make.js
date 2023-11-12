@@ -6,6 +6,7 @@ cli((book, opts) => {
     ...opts,
     book,
     cVersion: "C17",
+    cxxVersion: "C++20",
   });
 
   book.add("all", []);
@@ -13,14 +14,17 @@ cli((book, opts) => {
   const lib = c.addLibrary({
     name: "msgstream",
     version: "0.1.0",
+    privateDefinitions: {
+      MSGSTREAM_IS_COMPILING: "1",
+    },
     src: ["src/msgstream.c"],
   });
 
   const test = Path.build("msgstream_test");
   c.addExecutable({
     name: "msgstream_test",
-    src: ["test/msgstream_test.c"],
-    link: [lib],
+    src: ["test/msgstream_test.cpp"],
+    link: [lib, "boost-unit_test_framework"],
   });
 
   const compileCommands = Path.build("compile_commands.json");

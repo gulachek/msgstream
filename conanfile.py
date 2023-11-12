@@ -1,6 +1,7 @@
 from conan import ConanFile
-from conan.tools.files import chdir, copy
+from conan.tools.files import chdir, copy, mkdir
 from os.path import join
+from conan.tools.gnu import PkgConfigDeps
 
 class BasicConanfile(ConanFile):
     name = "msgstream"
@@ -13,14 +14,15 @@ class BasicConanfile(ConanFile):
         self.run("git clone git@github.com:gulachek/msgstream.git")
 
     def requirements(self):
-        pass
+        self.test_requires('boost/1.83.0')
 
     def build_requirements(self):
         # TODO - node and npm install?
         pass
 
     def generate(self):
-        pass
+        pc = PkgConfigDeps(self)
+        pc.generate()
 
     # This method is used to build the source code of the recipe using the desired commands.
     def build(self):
