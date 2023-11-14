@@ -20,6 +20,8 @@ cli((book, opts) => {
     src: ["src/msgstream.c"],
   });
 
+  book.add("msgstream", lib);
+
   const test = Path.build("msgstream_test");
   c.addExecutable({
     name: "msgstream_test",

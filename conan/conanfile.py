@@ -1,5 +1,6 @@
 from conan import ConanFile
 from conan.tools.files import chdir, copy, mkdir
+from conan.tools.scm import Git
 from os.path import join
 from conan.tools.gnu import PkgConfigDeps
 
@@ -11,27 +12,20 @@ class BasicConanfile(ConanFile):
     homepage = "https://gulachek.com"
 
     def source(self):
-        self.run("git clone git@github.com:gulachek/msgstream.git")
-
-    def requirements(self):
-        self.test_requires('boost/1.83.0')
-
-    def build_requirements(self):
-        # TODO - node and npm install?
-        pass
+        # TODO don't need to copy entire version control system
+        git = Git(self)
+        git.clone(url="git@github.com:gulachek/msgstream.git", target=".")
 
     def generate(self):
         pc = PkgConfigDeps(self)
         pc.generate()
 
-    # This method is used to build the source code of the recipe using the desired commands.
     def build(self):
-        with chdir(self, 'msgstream'):
-            self.run("npm install")
-            self.run("node make.js")
+        self.run("npm install")
+        self.run("node make.js msgstream")
 
     def package(self):
-        d = join(self.source_folder, 'msgstream')
+        d = self.source_folder
         build = join(d, "build")
         include = join(d, "include")
         copy(self, "*.h", include, join(self.package_folder, "include"))
