@@ -11,6 +11,16 @@
 #include <string_view>
 #include <thread>
 
+BOOST_AUTO_TEST_CASE(ErrNameOk) {
+  std::string_view nm{msgstream_errname(MSGSTREAM_OK)};
+  BOOST_TEST(nm == "MSGSTREAM_OK");
+}
+
+BOOST_AUTO_TEST_CASE(ErrStrOk) {
+  std::string_view str{msgstream_errstr(MSGSTREAM_OK)};
+  BOOST_TEST(str == "no error detected");
+}
+
 struct f {
   f() {
     int fds[2];

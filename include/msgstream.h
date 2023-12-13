@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "msgstream/errc.h"
+
 #ifdef MSGSTREAM_IS_COMPILING
 #define MSGSTREAM_API EXPORT
 #else
@@ -82,6 +84,20 @@ MSGSTREAM_API msgstream_size msgstream_send(msgstream_fd fd, const void *buf,
  */
 MSGSTREAM_API msgstream_size msgstream_recv(msgstream_fd, void *buf,
                                             msgstream_size buf_size, FILE *err);
+
+/**
+ * Return a string that describes the given error code
+ * @param ec The error code
+ * @return A string that describes the error code
+ */
+MSGSTREAM_API const char *msgstream_errstr(int ec);
+
+/**
+ * Return a string that corresponds to the given error code name
+ * @param ec The error code
+ * @return The error code's name (like "MSGSTREAM_OK")
+ */
+MSGSTREAM_API const char *msgstream_errname(int ec);
 
 #ifdef __cplusplus
 }
