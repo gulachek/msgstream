@@ -12,13 +12,10 @@
 #define MSGSTREAM_API
 #endif
 
-typedef int msgstream_fd;
-typedef int64_t msgstream_size;
-
+/**
+ * Message headers will never need more than this many bytes to be allocated
+ */
 #define MSGSTREAM_HEADER_BUF_SIZE 9
-
-#define MSGSTREAM_ERR -1
-#define MSGSTREAM_EOF -2
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,45 +24,40 @@ extern "C" {
 /**
  * Determine how many bytes a message header will be given the message buffer
  * size.
- * @param buf_size The size of the message buffer in bytes
- * @param err An optional stream to write error messages to
- * @return The number of bytes to read for the associated message's header
+ * @param[in] msg_buf_size The size of the message buffer in bytes
+ * @param[out] hdr_size The size of the header
+ * @return An error code
  */
-MSGSTREAM_API msgstream_size msgstream_header_size(size_t buf_size, FILE *err);
+MSGSTREAM_API int msgstream_header_size(size_t msg_buf_size, size_t *hdr_size);
 
 /**
  * Encode a message header into a buffer
- * @param header_buf The buffer in which to encode the header
- * @param header_buf_size The size of header_buf in bytes
- * @param msg_buf_size The size of the buffer receiving the message
- * @param msg_size The size of the message whose header is being encoded
- * @param err Optional stream to write error messages to
- * @return The size of the encoded header in bytes (msgstream_header_size)
+ * @param[in] msg_size The size of the message whose header is being encoded
+ * @param[in] hdr_size The size of the encoded header obtained from
+ * msgstream_header_size
+ * @param[out] hdr_buf The buffer in which to encode the header
+ * @return An error code
  */
-MSGSTREAM_API msgstream_size msgstream_encode_header(void *header_buf,
-                                                     size_t header_buf_size,
-                                                     size_t msg_buf_size,
-                                                     msgstream_size msg_size,
-                                                     FILE *err);
+MSGSTREAM_API int msgstream_encode_header(size_t msg_size, size_t hdr_size,
+                                          void *hdr_buf);
 
 /**
  * Decode a message header into a message size
- * @param header_buf The buffer holding the header to decode
- * @param header_size The size of header_in bytes obtained from
+ * @param[in] header_buf The buffer holding the header to decode
+ * @param[in] header_size The size of header_in bytes obtained from
  * msgstream_header_size
- * @param err Optional stream to write error messages to
- * @return The size of the message body associated with the header
+ * @param[out] msg_size The size of the message payload for the decoded header
+ * @return An error code
  */
-MSGSTREAM_API msgstream_size msgstream_decode_header(const void *header_buf,
-                                                     size_t header_size,
-                                                     FILE *err);
+MSGSTREAM_API int msgstream_decode_header(const void *header_buf,
+                                          size_t header_size, size_t *msg_size);
 
 /**
  * Send a message over a file descriptor
- * @param fd The file decriptor to write the message to
- * @param buf A buffer holding the message to be sent
- * @param buf_size The size of the buffer in bytes
- * @param msg_size The size of the message in bytes (<= buf_size)
+ * @param[in] fd The file decriptor to write the message to
+ * @param[in] buf A buffer holding the message to be sent
+ * @param[in] buf_size The size of the buffer in bytes
+ * @param[in] msg_size The size of the message in bytes (<= buf_size)
  * @return An error code
  */
 MSGSTREAM_API int msgstream_fd_send(int fd, const void *buf, size_t buf_size,
@@ -73,10 +65,10 @@ MSGSTREAM_API int msgstream_fd_send(int fd, const void *buf, size_t buf_size,
 
 /**
  * Receive a message over a file descriptor
- * @param fd The file decriptor to read the message from
- * @param buf A buffer to hold the received message
- * @param buf_size The size of the buffer in bytes
- * @param msg_size The size of the received message will be stored here
+ * @param[in] fd The file decriptor to read the message from
+ * @param[in] buf A buffer to hold the received message
+ * @param[in] buf_size The size of the buffer in bytes
+ * @param[out] msg_size The size of the received message
  * @return An error code
  */
 MSGSTREAM_API int msgstream_fd_recv(int fd, void *buf, size_t buf_size,
@@ -84,14 +76,14 @@ MSGSTREAM_API int msgstream_fd_recv(int fd, void *buf, size_t buf_size,
 
 /**
  * Return a string that describes the given error code
- * @param ec The error code
+ * @param[in] ec The error code
  * @return A string that describes the error code
  */
 MSGSTREAM_API const char *msgstream_errstr(int ec);
 
 /**
  * Return a string that corresponds to the given error code name
- * @param ec The error code
+ * @param[in] ec The error code
  * @return The error code's name (like "MSGSTREAM_OK")
  */
 MSGSTREAM_API const char *msgstream_errname(int ec);

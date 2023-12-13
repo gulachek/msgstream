@@ -4,23 +4,13 @@
 #include <sys/errno.h>
 #include <unistd.h>
 
-static void fperror(FILE *err, const char *s) {
-  if (!err)
-    return;
+int msgstream_header_size(size_t buf_size, size_t *hdr_size) {
+  if (!hdr_size)
+    return MSGSTREAM_NULL_ARG;
+  *hdr_size = 0;
 
-  char *msg = strerror(errno);
-  if (s)
-    fprintf(err, "%s: %s\n", s, msg);
-  else
-    fprintf(err, "%s\n", msg);
-}
-
-msgstream_size msgstream_header_size(size_t buf_size, FILE *err) {
-  if (buf_size < 1) {
-    if (err)
-      fprintf(err, "Message buffer must be at least 1 byte large\n");
-    return MSGSTREAM_ERR;
-  }
+  if (buf_size < 1)
+    return MSGSTREAM_SMALL_BUF;
 
   size_t nbytes = 0;
   while (buf_size > 0) {
@@ -29,171 +19,134 @@ msgstream_size msgstream_header_size(size_t buf_size, FILE *err) {
   }
 
   size_t out = 1 + nbytes;
-  if (out > MSGSTREAM_HEADER_BUF_SIZE) {
-    if (err)
-      fprintf(
-          err,
-          "Message header would be too big for a message buffer of size %lu\n",
-          buf_size);
-    return MSGSTREAM_ERR;
-  }
+  if (out > MSGSTREAM_HEADER_BUF_SIZE)
+    return MSGSTREAM_BIG_HDR;
 
-  return out;
+  *hdr_size = out;
+  return MSGSTREAM_OK;
 }
 
-msgstream_size msgstream_encode_header(void *header_buf, size_t header_buf_size,
-                                       size_t msg_buf_size,
-                                       msgstream_size msg_size, FILE *err) {
-  if (msg_size > msg_buf_size) {
-    if (err)
-      fprintf(err,
-              "Buffer size '%lu' is not large enough to fit message of size "
-              "'%lld'\n",
-              msg_buf_size, msg_size);
-    return MSGSTREAM_ERR;
-  }
+int msgstream_encode_header(size_t msg_size, size_t hdr_size, void *hdr_buf) {
+  if (!hdr_buf)
+    return MSGSTREAM_NULL_ARG;
 
-  size_t nheader = msgstream_header_size(msg_buf_size, err);
-  if (nheader < 0)
-    return MSGSTREAM_ERR;
+  if (hdr_size > MSGSTREAM_HEADER_BUF_SIZE)
+    return MSGSTREAM_BIG_HDR;
 
-  if (nheader > header_buf_size) {
-    if (err)
-      fprintf(err,
-              "msgstream header buf of size '%lu' is too small to fit header "
-              "of size '%lu'\n",
-              header_buf_size, nheader);
-    return MSGSTREAM_ERR;
-  }
+  if (hdr_size < 1)
+    return MSGSTREAM_SMALL_HDR;
 
-  uint8_t *buf = (uint8_t *)header_buf;
+  uint8_t *buf = (uint8_t *)hdr_buf;
 
   // first part is header size
-  buf[0] = (uint8_t)nheader;
+  buf[0] = (uint8_t)hdr_size;
 
   // next part is little endian message size
   size_t i = 1;
   while (msg_size > 0) {
+    if (i >= hdr_size)
+      return MSGSTREAM_BIG_MSG;
+
     buf[i] = msg_size % 256;
     msg_size /= 256;
     i += 1;
   }
 
-  for (; i < nheader; ++i)
+  for (; i < hdr_size; ++i)
     buf[i] = 0;
 
-  return nheader;
+  return MSGSTREAM_OK;
 }
 
-static msgstream_size readn(msgstream_fd fd, void *buf, msgstream_size nbytes,
-                            FILE *err) {
+static int readn(int fd, void *buf, size_t nbytes) {
   int expect_eof = 1;
-  msgstream_size nread = 0;
+  size_t nread = 0;
   while (nbytes > nread) {
     ssize_t n = read(fd, buf + nread, nbytes - nread);
-    if (n == -1) {
-      fperror(err, "read");
-      return MSGSTREAM_ERR;
-    }
+    if (n == -1)
+      return MSGSTREAM_SYS_READ_ERR;
 
-    if (n == 0) {
-      if (expect_eof) {
-        return MSGSTREAM_EOF;
-      } else {
-        if (err)
-          fprintf(err, "Unexpected eof\n");
-        return MSGSTREAM_ERR;
-      }
-    }
+    if (n == 0)
+      return expect_eof ? MSGSTREAM_EOF : MSGSTREAM_TRUNC;
 
     nread += n;
     expect_eof = 0;
   }
 
-  return nbytes;
+  return MSGSTREAM_OK;
 }
 
-msgstream_size msgstream_decode_header(const void *header_buf,
-                                       size_t header_size, FILE *err) {
+int msgstream_decode_header(const void *header_buf, size_t header_size,
+                            size_t *msg_size) {
+  if (!(header_buf && msg_size))
+    return MSGSTREAM_NULL_ARG;
+
+  if (header_size < 1)
+    return MSGSTREAM_SMALL_HDR;
+
+  if (header_size > MSGSTREAM_HEADER_BUF_SIZE)
+    return MSGSTREAM_BIG_HDR;
+
   const uint8_t *buf = (const uint8_t *)header_buf;
 
-  if (buf[0] != header_size) {
-    if (err)
-      fprintf(err,
-              "Received unexpected msgstream header size. Expected '%lu' but "
-              "received '%d'\n",
-              header_size, buf[0]);
-    return MSGSTREAM_ERR;
-  }
+  if (buf[0] != header_size)
+    return MSGSTREAM_HDR_SYNC;
 
-  msgstream_size msg_size = 0;
-  msgstream_size mult = 1;
+  size_t msize = 0;
+  size_t mult = 1;
   for (size_t i = 1; i < header_size; ++i) {
-    msg_size += mult * buf[i];
+    msize += mult * buf[i];
     mult *= 256;
   }
 
-  return msg_size;
+  *msg_size = msize;
+  return MSGSTREAM_OK;
 }
 
 int msgstream_fd_send(int fd, const void *buf, size_t buf_size,
                       size_t msg_size) {
-  assert(buf_size > 0);
+  int ec;
+  size_t hdr_size;
+  if ((ec = msgstream_header_size(buf_size, &hdr_size)))
+    return ec;
 
-  uint8_t header_buf[MSGSTREAM_HEADER_BUF_SIZE];
-  msgstream_size header_size = msgstream_encode_header(
-      header_buf, sizeof(header_buf), buf_size, msg_size, NULL);
-
-  if (header_size < 0) {
-    /*
-if (err)
-fprintf(err, "Error encoding msgstream header\n");
-            */
-    return MSGSTREAM_ERR;
-  }
+  uint8_t hdr_buf[MSGSTREAM_HEADER_BUF_SIZE];
+  if ((ec = msgstream_encode_header(msg_size, hdr_size, hdr_buf)))
+    return ec;
 
   // TODO - one system call?
-  if (write(fd, header_buf, header_size) == -1) {
-    // fperror(err, "error writing msgstream header");
-    return MSGSTREAM_ERR;
-  }
+  if (write(fd, hdr_buf, hdr_size) == -1)
+    return MSGSTREAM_SYS_WRITE_ERR;
 
-  if (write(fd, buf, msg_size) == -1) {
-    // fperror(err, "error writing msgstream body");
-    return MSGSTREAM_ERR;
-  }
+  if (write(fd, buf, msg_size) == -1)
+    return MSGSTREAM_SYS_WRITE_ERR;
 
   return MSGSTREAM_OK;
 }
 
 int msgstream_fd_recv(int fd, void *buf, size_t buf_size, size_t *msg_size) {
-  assert(msg_size);
+  if (!msg_size)
+    return MSGSTREAM_NULL_ARG;
   *msg_size = 0;
 
-  msgstream_size nheader = msgstream_header_size(buf_size, NULL);
-  if (nheader < 0)
-    return MSGSTREAM_ERR;
+  size_t hdr_size;
+  int ec;
+  if ((ec = msgstream_header_size(buf_size, &hdr_size)))
+    return ec;
 
-  uint8_t header_buf[MSGSTREAM_HEADER_BUF_SIZE];
-  msgstream_size nheader_ret = readn(fd, header_buf, nheader, NULL);
-  if (nheader_ret < 0) {
-    if (nheader_ret == MSGSTREAM_EOF)
-      return MSGSTREAM_EOF;
+  uint8_t hdr_buf[MSGSTREAM_HEADER_BUF_SIZE];
+  if ((ec = readn(fd, hdr_buf, hdr_size)))
+    return ec;
 
-    return MSGSTREAM_ERR;
-  }
+  size_t msize;
+  if ((ec = msgstream_decode_header(hdr_buf, hdr_size, &msize)))
+    return ec;
 
-  size_t msize = msgstream_decode_header(header_buf, nheader, NULL);
-  if (msize <= 0)
-    return msize;
+  if ((ec = readn(fd, buf, msize))) {
+    if (ec == MSGSTREAM_EOF)
+      return MSGSTREAM_TRUNC;
 
-  msgstream_size body_size = readn(fd, buf, msize, NULL);
-  if (body_size < 0) {
-    if (body_size == MSGSTREAM_EOF)
-      // fprintf(err, "Unexpected eof\n");
-
-      // fprintf(err, "Failed to read msgstream body\n");
-      return MSGSTREAM_ERR;
+    return ec;
   }
 
   *msg_size = msize;

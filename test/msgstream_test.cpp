@@ -132,12 +132,17 @@ BOOST_AUTO_TEST_SUITE(header_size)
 #define EXPAND(X) X
 
 #define DO_TEST(BUF_SZ, RET)                                                   \
-  auto b##BUF_SZ = msgstream_header_size(BUF_SZ, NULL);                        \
-  BOOST_TEST(EXPAND(b##BUF_SZ) == RET);
+  {                                                                            \
+    size_t b##BUF_SZ;                                                          \
+    int ec = msgstream_header_size(BUF_SZ, &EXPAND(b##BUF_SZ));                \
+    BOOST_TEST(!ec);                                                           \
+    BOOST_TEST(EXPAND(b##BUF_SZ) == RET);                                      \
+  }
 
 BOOST_AUTO_TEST_CASE(EmptyBufferIsMeaninglessAndErrors) {
-  auto ret = msgstream_header_size(0, NULL);
-  BOOST_TEST(ret < 0);
+  size_t n = 1;
+  int ec = msgstream_header_size(0, &n);
+  BOOST_TEST(ec == MSGSTREAM_SMALL_BUF);
 }
 
 BOOST_AUTO_TEST_CASE(TwoByteHeader){DO_TEST(0x1, 2) DO_TEST(0xff, 2)}
@@ -170,53 +175,43 @@ BOOST_AUTO_TEST_SUITE_END() // header_size
 
         BOOST_AUTO_TEST_CASE(EmptyBufferIsMeaninglessAndErrors) {
   uint8_t header_buf[MSGSTREAM_HEADER_BUF_SIZE];
-  auto ret =
-      msgstream_encode_header(header_buf, sizeof(header_buf), 0, 0, NULL);
-  BOOST_TEST(ret < 0);
+  auto ec = msgstream_encode_header(0, 0, header_buf);
+  BOOST_TEST(ec == MSGSTREAM_SMALL_HDR);
 }
 
 BOOST_AUTO_TEST_CASE(MsgSizeLargerThanBufSizeIsError) {
   uint8_t header_buf[MSGSTREAM_HEADER_BUF_SIZE];
-  auto ret =
-      msgstream_encode_header(header_buf, sizeof(header_buf), 1, 2, NULL);
-  BOOST_TEST(ret < 0);
-}
-
-BOOST_AUTO_TEST_CASE(HeaderBufTooSmallIsError) {
-  uint8_t header_buf[1]; // too small for 2 byte header
-  auto ret =
-      msgstream_encode_header(header_buf, sizeof(header_buf), 1, 1, NULL);
-  BOOST_TEST(ret < 0);
+  auto ec = msgstream_encode_header(0xffff, 2, header_buf);
+  BOOST_TEST(ec == MSGSTREAM_BIG_MSG);
 }
 
 BOOST_AUTO_TEST_CASE(EncodesSingleByteMessageHeaderAsTwoBytes) {
   char header_buf[MSGSTREAM_HEADER_BUF_SIZE];
-  auto ret =
-      msgstream_encode_header(header_buf, sizeof(header_buf), 1, 1, NULL);
-  BOOST_TEST(ret == 2);
+  size_t hdr_size = 2;
+  auto ec = msgstream_encode_header(1, hdr_size, header_buf);
+  BOOST_TEST(!ec);
 
-  std::string_view header{header_buf, header_buf + ret};
+  std::string_view header{header_buf, header_buf + hdr_size};
   BOOST_TEST(header == "\x02\x01");
 }
 
 BOOST_AUTO_TEST_CASE(EncodesMultiByteHeaderWithLittleEndianMsgSize) {
   char header_buf[MSGSTREAM_HEADER_BUF_SIZE];
-  auto ret = msgstream_encode_header(header_buf, sizeof(header_buf), 0xffffffff,
-                                     0x04030201, NULL);
-  BOOST_TEST(ret == 5);
+  size_t hdr_size = 5;
+  auto ec = msgstream_encode_header(0x04030201, hdr_size, header_buf);
+  BOOST_TEST(!ec);
 
-  std::string_view header{header_buf, header_buf + ret};
+  std::string_view header{header_buf, header_buf + hdr_size};
   BOOST_TEST(header == "\x05\x01\x02\x03\x04");
 }
 
 BOOST_AUTO_TEST_CASE(EncodesNineByteHeaderWithLittleEndianMsgSize) {
   char header_buf[MSGSTREAM_HEADER_BUF_SIZE];
-  auto ret =
-      msgstream_encode_header(header_buf, sizeof(header_buf),
-                              0xffffffffffffffff, 0x0807060504030201, NULL);
-  BOOST_TEST(ret == 9);
+  size_t hdr_size = 9;
+  auto ec = msgstream_encode_header(0x0807060504030201, hdr_size, header_buf);
+  BOOST_TEST(!ec);
 
-  std::string_view header{header_buf, header_buf + ret};
+  std::string_view header{header_buf, header_buf + hdr_size};
   BOOST_TEST(header == "\x09\x01\x02\x03\x04\x05\x06\x07\x08");
 }
 BOOST_AUTO_TEST_SUITE_END() // encode_header
@@ -225,32 +220,41 @@ BOOST_AUTO_TEST_SUITE(DecodeHeader)
 
 BOOST_AUTO_TEST_CASE(FirstByteMismatchWithHeaderSizeIsError) {
   uint8_t header_buf[] = {0x01, 0x02}; // header size first byte is invalid
-  auto msg_size = msgstream_decode_header(header_buf, sizeof(header_buf), NULL);
-  BOOST_TEST(msg_size < 0);
+  size_t n = 0;
+  auto ec = msgstream_decode_header(header_buf, sizeof(header_buf), &n);
+  BOOST_TEST(ec == MSGSTREAM_HDR_SYNC);
 }
 
 BOOST_AUTO_TEST_CASE(ReturnsEmptyMessageSizeAsZero) {
   uint8_t header_buf[] = {0x02, 0x00};
-  auto msg_size = msgstream_decode_header(header_buf, sizeof(header_buf), NULL);
-  BOOST_TEST(msg_size == 0);
+  size_t n = 1;
+  auto ec = msgstream_decode_header(header_buf, sizeof(header_buf), &n);
+  BOOST_TEST(!ec);
+  BOOST_TEST(n == 0);
 }
 
 BOOST_AUTO_TEST_CASE(ReturnsSingleByteMessageSize) {
   uint8_t header_buf[] = {0x02, 0xa1};
-  auto msg_size = msgstream_decode_header(header_buf, sizeof(header_buf), NULL);
-  BOOST_TEST(msg_size == 0xa1);
+  size_t n = 0;
+  auto ec = msgstream_decode_header(header_buf, sizeof(header_buf), &n);
+  BOOST_TEST(!ec);
+  BOOST_TEST(n == 0xa1);
 }
 
 BOOST_AUTO_TEST_CASE(ReturnsFourByteMessageSizeFromLittleEndian) {
   uint8_t header_buf[] = {0x05, 0x01, 0x02, 0x03, 0x04};
-  auto msg_size = msgstream_decode_header(header_buf, sizeof(header_buf), NULL);
-  BOOST_TEST(msg_size == 0x04030201);
+  size_t n = 0;
+  auto ec = msgstream_decode_header(header_buf, sizeof(header_buf), &n);
+  BOOST_TEST(!ec);
+  BOOST_TEST(n == 0x04030201);
 }
 
 BOOST_AUTO_TEST_CASE(ReturnsEightByteMessageSizeFromLittleEndian) {
   uint8_t header_buf[] = {0x09, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
-  auto msg_size = msgstream_decode_header(header_buf, sizeof(header_buf), NULL);
-  BOOST_TEST(msg_size == 0x0807060504030201);
+  size_t n = 0;
+  auto ec = msgstream_decode_header(header_buf, sizeof(header_buf), &n);
+  BOOST_TEST(!ec);
+  BOOST_TEST(n == 0x0807060504030201);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
