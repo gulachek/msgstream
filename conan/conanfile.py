@@ -6,7 +6,7 @@ from conan.tools.gnu import PkgConfigDeps
 
 class BasicConanfile(ConanFile):
     name = "msgstream"
-    version = "0.2.1"
+    version = "0.3.0"
     description = "Write messages with boundaries to streams"
     license = "MIT"
     homepage = "https://github.com/gulachek/msgstream"
@@ -30,7 +30,7 @@ class BasicConanfile(ConanFile):
         include = join(d, "include")
         buildInclude = join(build, "include")
         copy(self, "*.h", include, join(self.package_folder, "include"))
-        copy(self, "msgstream/*.h", buildInclude, join(self.package_folder, "include/msgstream"))
+        copy(self, "msgstream/*.h", buildInclude, join(self.package_folder, "include"))
         copy(self, "libmsgstream.dylib", build, join(self.package_folder, "lib"))
 
     def package_info(self):
