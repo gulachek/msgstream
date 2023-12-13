@@ -136,33 +136,34 @@ msgstream_size msgstream_decode_header(const void *header_buf,
   return msg_size;
 }
 
-msgstream_size msgstream_send(msgstream_fd fd, const void *buf,
-                              msgstream_size buf_size, msgstream_size msg_size,
-                              FILE *err) {
+int msgstream_fd_send(int fd, const void *buf, size_t buf_size,
+                      size_t msg_size) {
   assert(buf_size > 0);
 
   uint8_t header_buf[MSGSTREAM_HEADER_BUF_SIZE];
   msgstream_size header_size = msgstream_encode_header(
-      header_buf, sizeof(header_buf), buf_size, msg_size, err);
+      header_buf, sizeof(header_buf), buf_size, msg_size, NULL);
 
   if (header_size < 0) {
-    if (err)
-      fprintf(err, "Error encoding msgstream header\n");
+    /*
+if (err)
+fprintf(err, "Error encoding msgstream header\n");
+            */
     return MSGSTREAM_ERR;
   }
 
   // TODO - one system call?
   if (write(fd, header_buf, header_size) == -1) {
-    fperror(err, "error writing msgstream header");
+    // fperror(err, "error writing msgstream header");
     return MSGSTREAM_ERR;
   }
 
   if (write(fd, buf, msg_size) == -1) {
-    fperror(err, "error writing msgstream body");
+    // fperror(err, "error writing msgstream body");
     return MSGSTREAM_ERR;
   }
 
-  return msg_size;
+  return MSGSTREAM_OK;
 }
 
 int msgstream_fd_recv(int fd, void *buf, size_t buf_size, size_t *msg_size) {
