@@ -9,12 +9,12 @@ class BasicConanfile(ConanFile):
     version = "0.2.1"
     description = "Write messages with boundaries to streams"
     license = "MIT"
-    homepage = "https://gulachek.com"
+    homepage = "https://github.com/gulachek/msgstream"
 
     def source(self):
         # TODO don't need to copy entire version control system
         git = Git(self)
-        git.clone(url="git@github.com:gulachek/msgstream.git", target=".")
+        git.clone(url="https://github.com/gulachek/msgstream.git", target=".")
 
     def generate(self):
         pc = PkgConfigDeps(self)
@@ -28,7 +28,9 @@ class BasicConanfile(ConanFile):
         d = self.source_folder
         build = join(d, "build")
         include = join(d, "include")
+        buildInclude = join(build, "include")
         copy(self, "*.h", include, join(self.package_folder, "include"))
+        copy(self, "msgstream/*.h", buildInclude, join(self.package_folder, "include/msgstream"))
         copy(self, "libmsgstream.dylib", build, join(self.package_folder, "lib"))
 
     def package_info(self):
