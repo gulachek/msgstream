@@ -78,12 +78,11 @@ MSGSTREAM_API msgstream_size msgstream_send(msgstream_fd fd, const void *buf,
  * @param fd The file decriptor to read the message from
  * @param buf A buffer to hold the received message
  * @param buf_size The size of the buffer in bytes
- * @param err An optional stream to write error messages to
- * @return The size of the received message  on success and a negative value on
- * failure
+ * @param msg_size The size of the received message will be stored here
+ * @return An error code
  */
-MSGSTREAM_API msgstream_size msgstream_recv(msgstream_fd, void *buf,
-                                            msgstream_size buf_size, FILE *err);
+MSGSTREAM_API int msgstream_fd_recv(int fd, void *buf, size_t buf_size,
+                                    size_t *msg_size);
 
 /**
  * Return a string that describes the given error code

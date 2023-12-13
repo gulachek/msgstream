@@ -45,31 +45,36 @@ struct f {
 BOOST_FIXTURE_TEST_CASE(TransferSingleByte, f) {
   int8_t b42 = 42, recv = 0;
   auto sret = msgstream_send(write_, &b42, sizeof(b42), 1, NULL);
-
-  auto rret = msgstream_recv(read_, &recv, sizeof(recv), NULL);
-
   BOOST_TEST(sret == 1);
-  BOOST_TEST(rret == 1);
+
+  size_t size = 0;
+  auto ec = msgstream_fd_recv(read_, &recv, sizeof(recv), &size);
+  BOOST_TEST(!ec);
+
+  BOOST_TEST(size == 1);
   BOOST_TEST(recv == 42);
 }
 
 BOOST_FIXTURE_TEST_CASE(EofIsDistinctError, f) {
   int8_t recv = 0;
   close(write_);
-  auto rret = msgstream_recv(read_, &recv, sizeof(recv), NULL);
+  size_t size = 1;
+  auto ec = msgstream_fd_recv(read_, &recv, sizeof(recv), &size);
 
-  BOOST_TEST(rret == MSGSTREAM_EOF);
-  BOOST_TEST(rret < 0);
+  BOOST_TEST(ec == MSGSTREAM_EOF);
+  BOOST_TEST(size == 0);
 }
 
 BOOST_FIXTURE_TEST_CASE(TransferEmptyMsg, f) {
   int8_t b42 = 42, recv = 96;
   auto sret = msgstream_send(write_, &b42, sizeof(b42), 0, NULL);
-
-  auto rret = msgstream_recv(read_, &recv, sizeof(recv), NULL);
-
   BOOST_TEST(sret == 0);
-  BOOST_TEST(rret == 0);
+
+  size_t size = 1;
+  auto ec = msgstream_fd_recv(read_, &recv, sizeof(recv), &size);
+  BOOST_TEST(!ec);
+  BOOST_TEST(size == 0);
+
   BOOST_TEST(recv == 96); // no change
 }
 
@@ -78,13 +83,14 @@ BOOST_FIXTURE_TEST_CASE(TransferStringHello, f) {
   size_t len = strlen(hello);
 
   auto sret = msgstream_send(write_, hello, sizeof(hello), len, NULL);
-
-  auto rret = msgstream_recv(read_, recv, sizeof(recv), NULL);
-
   BOOST_TEST(sret == len);
-  BOOST_TEST(rret == len);
 
-  std::string_view recv_sv{recv, recv + rret};
+  size_t size = 0;
+  auto ec = msgstream_fd_recv(read_, recv, sizeof(recv), &size);
+  BOOST_TEST(!ec);
+  BOOST_TEST(size == len);
+
+  std::string_view recv_sv{recv, recv + size};
   BOOST_TEST(recv_sv == "hello");
 }
 
@@ -101,11 +107,13 @@ BOOST_FIXTURE_TEST_CASE(TransferHugeMessage, f) {
   std::thread th{
       [&] { sret = msgstream_send(write_, huge, HUGE, HUGE, stderr); }};
 
-  auto rret = msgstream_recv(read_, recv, HUGE, stderr);
+  size_t size;
+  auto ec = msgstream_fd_recv(read_, recv, HUGE, &size);
   th.join();
 
+  BOOST_TEST(ec == MSGSTREAM_OK);
   BOOST_TEST(sret == HUGE);
-  BOOST_TEST(rret == HUGE);
+  BOOST_TEST(size == HUGE);
 
   for (size_t i = 0; i < HUGE; ++i) {
     if (recv[i] != (i % 256)) {
