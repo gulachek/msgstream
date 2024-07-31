@@ -6,7 +6,7 @@ from conan.tools.gnu import PkgConfigDeps
 
 class BasicConanfile(ConanFile):
     name = "msgstream"
-    version = "0.3.0"
+    version = "0.3.1"
     description = "Write messages with boundaries to streams"
     license = "MIT"
     homepage = "https://github.com/gulachek/msgstream"
