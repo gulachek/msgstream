@@ -3,6 +3,7 @@
 
 #include "msgstream.h"
 
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +11,9 @@
 
 #include <string_view>
 #include <thread>
+
+using std::size_t;
+using std::uint8_t;
 
 BOOST_AUTO_TEST_CASE(OkIsFalsy) { BOOST_TEST(!MSGSTREAM_OK); }
 
@@ -255,6 +259,136 @@ BOOST_AUTO_TEST_CASE(ReturnsEightByteMessageSizeFromLittleEndian) {
   auto ec = msgstream_decode_header(header_buf, sizeof(header_buf), &n);
   BOOST_TEST(!ec);
   BOOST_TEST(n == 0x0807060504030201);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_SUITE(IncrementalRead)
+
+BOOST_FIXTURE_TEST_CASE(DecodesOneByteAtATime, f) {
+  constexpr size_t bufsz = 512;
+  uint8_t recv[bufsz], send[bufsz];
+
+  size_t msgsz = 300;
+
+  for (int i = 0; i < msgsz; ++i) {
+    send[i] = (2 * i) % 0x100;
+  }
+
+  uint8_t hdr_buf[MSGSTREAM_HEADER_BUF_SIZE];
+  size_t hdr_size;
+  int ec = msgstream_header_size(msgsz, &hdr_size);
+  BOOST_ASSERT(ec == MSGSTREAM_OK);
+
+  ec = msgstream_encode_header(msgsz, hdr_size, hdr_buf);
+  BOOST_ASSERT(ec == MSGSTREAM_OK);
+
+  auto reader = msgstream_incremental_reader_alloc(recv, msgsz);
+  BOOST_ASSERT(reader);
+
+  int is_complete;
+  size_t recv_msg_size;
+
+  for (int i = 0; i < hdr_size; ++i) {
+    write(write_, &hdr_buf[i], 1);
+
+    ec = msgstream_fd_incremental_recv(read_, reader, &is_complete,
+                                       &recv_msg_size);
+    BOOST_ASSERT(ec == MSGSTREAM_OK);
+    BOOST_ASSERT(!is_complete);
+  }
+
+  for (int i = 0; i < msgsz - 1; ++i) {
+    write(write_, &send[i], 1);
+
+    ec = msgstream_fd_incremental_recv(read_, reader, &is_complete,
+                                       &recv_msg_size);
+    BOOST_ASSERT(ec == MSGSTREAM_OK);
+    BOOST_ASSERT(!is_complete);
+  }
+
+  write(write_, &send[msgsz - 1], 1);
+  ec = msgstream_fd_incremental_recv(read_, reader, &is_complete,
+                                     &recv_msg_size);
+
+  BOOST_TEST(ec == MSGSTREAM_OK);
+  BOOST_TEST(is_complete);
+  BOOST_TEST(recv_msg_size == msgsz);
+
+  for (int i = 0; i < msgsz; ++i) {
+    BOOST_TEST(recv[i] == ((2 * i) % 0x100));
+  }
+
+  msgstream_incremental_reader_free(reader);
+}
+
+BOOST_FIXTURE_TEST_CASE(CanReadTwoMessagesInARow, f) {
+  std::string msg = "hello";
+  std::array<char, 32> buf;
+
+  auto reader = msgstream_incremental_reader_alloc(buf.data(), buf.size());
+  BOOST_ASSERT(reader);
+
+  msgstream_fd_send(write_, msg.data(), buf.size(), msg.size() + 1);
+
+  int is_complete;
+  size_t msgsz;
+  do {
+    int ec = msgstream_fd_incremental_recv(read_, reader, &is_complete, &msgsz);
+    BOOST_ASSERT(ec == MSGSTREAM_OK);
+  } while (!is_complete);
+
+  // interpret as C string
+  std::string_view hello{buf.data()};
+  BOOST_TEST(hello == "hello");
+
+  msg = "goodbye";
+
+  msgstream_fd_send(write_, msg.data(), buf.size(), msg.size() + 1);
+
+  do {
+    int ec = msgstream_fd_incremental_recv(read_, reader, &is_complete, &msgsz);
+    BOOST_ASSERT(ec == MSGSTREAM_OK);
+  } while (!is_complete);
+
+  std::string_view goodbye{buf.data()};
+  BOOST_TEST(goodbye == "goodbye");
+
+  msgstream_incremental_reader_free(reader);
+}
+
+BOOST_FIXTURE_TEST_CASE(MisMatchBufSizeIsError, f) {
+  uint8_t b1 = 1;
+  std::array<uint8_t, 0x10000> buf;
+  auto reader = msgstream_incremental_reader_alloc(buf.data(), buf.size());
+
+  // This will try to read 4 byte header. The sent message
+  // is 3 bytes in total. Verify we don't just blindly read
+  // the 3 bytes assuming the header is ok.
+
+  int ec = msgstream_fd_send(write_, &b1, 1, 1);
+  BOOST_ASSERT(ec == MSGSTREAM_OK);
+
+  int is_complete;
+  size_t msg_size;
+  ec = msgstream_fd_incremental_recv(read_, reader, &is_complete, &msg_size);
+
+  BOOST_TEST(ec == MSGSTREAM_HDR_SYNC);
+}
+
+BOOST_FIXTURE_TEST_CASE(NoDataOnNonBlockingFdIsNotError, f) {
+  std::array<uint8_t, 512> buf;
+  auto reader = msgstream_incremental_reader_alloc(buf.data(), buf.size());
+
+  BOOST_ASSERT(fcntl(read_, F_SETFL, O_NONBLOCK) != -1);
+
+  int is_complete;
+  size_t msg_size;
+  int ec =
+      msgstream_fd_incremental_recv(read_, reader, &is_complete, &msg_size);
+
+  BOOST_TEST(ec == MSGSTREAM_OK);
+  BOOST_TEST(!is_complete);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

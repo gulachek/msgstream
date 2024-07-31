@@ -74,6 +74,43 @@ MSGSTREAM_API int msgstream_fd_send(int fd, const void *buf, size_t buf_size,
 MSGSTREAM_API int msgstream_fd_recv(int fd, void *buf, size_t buf_size,
                                     size_t *msg_size);
 
+/// @private
+struct msgstream_incremental_reader_;
+
+/**
+ * A type for incrementally reading messages, such as in asynchronous code
+ */
+typedef struct msgstream_incremental_reader_ *msgstream_incremental_reader;
+
+/**
+ * Allocate an incremental reader
+ * @param[in] buf The buffer to hold the received message
+ * @param[in] buf_size The size of the buffer in bytes
+ * @return The allocated opaque incremental reader, or NULL
+ */
+MSGSTREAM_API msgstream_incremental_reader
+msgstream_incremental_reader_alloc(void *buf, size_t buf_size);
+
+/**
+ * Free an incremental reader
+ * @param[in] reader The reader to free
+ */
+MSGSTREAM_API void
+msgstream_incremental_reader_free(msgstream_incremental_reader reader);
+
+/**
+ * Incrementally receive a msgstream message
+ * @param[in] fd The file descriptor to read the message from
+ * @param[in] reader The message reader to decode the message
+ * @param[out] is_complete 1 if the message is complete, 0 otherwise
+ * @param[out] msg_size The size of the received message in bytes. Only valid
+ * when is_complete == 1
+ * @return An error code
+ */
+MSGSTREAM_API int
+msgstream_fd_incremental_recv(int fd, msgstream_incremental_reader reader,
+                              int *is_complete, size_t *msg_size);
+
 /**
  * Return a string that describes the given error code
  * @param[in] ec The error code

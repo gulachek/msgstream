@@ -1,5 +1,6 @@
 #include "msgstream.h"
 #include <assert.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/errno.h>
 #include <unistd.h>
@@ -151,4 +152,126 @@ int msgstream_fd_recv(int fd, void *buf, size_t buf_size, size_t *msg_size) {
 
   *msg_size = msize;
   return MSGSTREAM_OK;
+}
+
+enum msg_read_stage { HEADER, MSG };
+
+struct msgstream_incremental_reader_ {
+  uint8_t hdr_buf[MSGSTREAM_HEADER_BUF_SIZE];
+  size_t hdr_size;
+
+  uint8_t *buf;
+  size_t buf_size;
+  size_t msg_size;
+
+  enum msg_read_stage stage;
+  size_t nread;
+};
+
+msgstream_incremental_reader
+msgstream_incremental_reader_alloc(void *buf, size_t buf_size) {
+  struct msgstream_incremental_reader_ *reader =
+      malloc(sizeof(struct msgstream_incremental_reader_));
+
+  if (!reader)
+    return NULL;
+
+  int ec = msgstream_header_size(buf_size, &reader->hdr_size);
+  if (ec != MSGSTREAM_OK) {
+    free(reader);
+    return NULL;
+  }
+  memset(reader->hdr_buf, 0, MSGSTREAM_HEADER_BUF_SIZE);
+
+  reader->buf = buf;
+  reader->buf_size = buf_size;
+  reader->msg_size = 0;
+
+  reader->stage = HEADER;
+  reader->nread = 0;
+
+  return reader;
+}
+
+void msgstream_incremental_reader_free(msgstream_incremental_reader reader) {
+  if (reader)
+    free(reader);
+}
+
+static int incremental_readn(int fd, size_t n, uint8_t *buf, size_t *pnread) {
+  size_t nread = *pnread;
+  if (nread >= n) {
+    return MSGSTREAM_OK;
+  }
+
+  size_t nleft = n - nread;
+  int nbytes = read(fd, buf + nread, nleft);
+  if (nbytes < 0) {
+    if (errno == EAGAIN)
+      return MSGSTREAM_OK;
+    else
+      return MSGSTREAM_SYS_READ_ERR;
+  } else if (nbytes == 0) {
+    if (nread == 0) {
+      return MSGSTREAM_EOF;
+    } else {
+      return MSGSTREAM_TRUNC;
+    }
+  } else {
+    *pnread = nread + nbytes;
+    return MSGSTREAM_OK;
+  }
+}
+
+int msgstream_fd_incremental_recv(int fd, msgstream_incremental_reader reader,
+                                  int *is_complete, size_t *pmsg_size) {
+  if (!(is_complete && reader && pmsg_size))
+    return MSGSTREAM_NULL_ARG;
+
+  *is_complete = 0;
+  *pmsg_size = 0;
+
+  if (reader->stage == HEADER) {
+    int ec = incremental_readn(fd, reader->hdr_size, reader->hdr_buf,
+                               &reader->nread);
+
+    if (ec == MSGSTREAM_OK) {
+      if (reader->nread == reader->hdr_size) {
+        ec = msgstream_decode_header(reader->hdr_buf, reader->hdr_size,
+                                     &reader->msg_size);
+        if (ec != MSGSTREAM_OK)
+          return ec;
+
+        reader->stage = MSG;
+        reader->nread = 0;
+
+        if (reader->msg_size == 0) {
+          *is_complete = 1;
+          *pmsg_size = 0;
+          reader->stage = HEADER;
+          return MSGSTREAM_OK;
+        }
+      } else if (reader->nread > 0) {
+        if (reader->hdr_buf[0] != reader->hdr_size) {
+          ec = MSGSTREAM_HDR_SYNC;
+        }
+      }
+    }
+
+    return ec;
+  } else {
+    int ec =
+        incremental_readn(fd, reader->msg_size, reader->buf, &reader->nread);
+
+    if (reader->nread == reader->msg_size) {
+      *is_complete = 1;
+      *pmsg_size = reader->msg_size;
+
+      // reset to read next message
+      reader->stage = HEADER;
+      reader->nread = 0;
+    }
+
+    return ec;
+  }
 }
