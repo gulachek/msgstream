@@ -6,9 +6,7 @@
 
 #include "msgstream/errc.h"
 
-#ifdef MSGSTREAM_IS_COMPILING
-#define MSGSTREAM_API EXPORT
-#else
+#ifndef MSGSTREAM_API
 #define MSGSTREAM_API
 #endif
 
