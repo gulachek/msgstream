@@ -1,59 +1,11 @@
 import { cli, Path } from "esmakefile";
-import { writeFile, readFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { errorCodes } from "./jslib/errorCodes.mjs";
-import { Clang } from "./jslib/clang.mjs";
-import { Ajv } from "ajv";
-import { PkgConfig } from "espkg-config";
+import { Distribution, addCompileCommands } from "esmakefile-cmake";
 
 const require = createRequire(import.meta.url);
 const nunjucks = require("nunjucks");
-
-const ajv = new Ajv();
-const stringArray = { type: "array", items: { type: "string" } };
-const schema = {
-  type: "object",
-  properties: {
-    cc: { type: "string" },
-    cxx: { type: "string" },
-    cppflags: { ...stringArray },
-    cflags: { ...stringArray },
-    cxxflags: { ...stringArray },
-    ldflags: { ...stringArray },
-    pkgConfigPaths: { ...stringArray, uniqueItems: true },
-    libraryType: { type: "string", enum: ["static", "shared"] },
-  },
-  additionalProperties: false,
-};
-
-const validate = ajv.compile(schema);
-
-const inputConfig = JSON.parse(await readFile("config.json", "utf8"));
-if (!validate(inputConfig)) {
-  console.error('The configuration file "config.json" has errors.');
-  console.error(validate.errors);
-  process.exit(1);
-}
-
-const config = {
-  cc: "clang",
-  cxx: "clang++",
-  cppflags: [],
-  cflags: [
-    "-std=c17",
-    "-fvisibility=hidden",
-    '-DMSGSTREAM_API=__attribute__((visibility("default")))',
-  ],
-  cxxflags: ["-std=c++20"],
-  ldflags: [],
-  pkgConfigPaths: ["pkgconfig"],
-  libraryType: "static",
-  ...inputConfig, // override the defaults
-};
-
-const pkg = new PkgConfig({
-  searchPaths: config.pkgConfigPaths,
-});
 
 function addRenderWithErrorCodes(make, dest, srcRaw) {
   const src = Path.src(srcRaw);
@@ -63,51 +15,45 @@ function addRenderWithErrorCodes(make, dest, srcRaw) {
   });
 }
 
-const bt = "boost-unit_test_framework";
-const { flags: btCflags } = await pkg.cflags([bt]);
-const { flags: btLibs } = await pkg.libs([bt]);
-
 cli((make) => {
   const include = Path.src("include");
   const genInclude = Path.build("include");
   const errcH = genInclude.join("msgstream/errc.h");
-  const errcC = Path.build("errc.c");
-
-  config.cppflags.unshift("-I", make.abs(include), "-I", make.abs(genInclude));
-
-  const clang = new Clang(make, config);
+  const errcC = Path.build("src/errc.c");
 
   make.add("all", []);
 
   addRenderWithErrorCodes(make, errcH, "src/njx/errc.h");
   addRenderWithErrorCodes(make, errcC, "src/njx/errc.c");
 
-  const msg = clang.compile("src/msgstream.c");
-  const err = clang.compile(errcC);
+  const d = new Distribution(make, {
+    name: "msgstream",
+    version: "0.1.0",
+    cStd: 11,
+    cxxStd: 20,
+  });
+
+  const msg = d.addLibrary({
+    name: "msgstream",
+    src: ["src/msgstream.c", errcC],
+    includeDirs: [include, genInclude],
+  });
+
+  // TODO - esmakefile-cmake should support obj for src lookup
+  const err = Path.gen(errcC, { ext: ".o" });
   make.add(err, [errcH]);
 
-  const lib = clang.link({
-    name: "msgstream",
-    runtime: "c",
-    binaries: [msg, err],
-    linkType: config.libraryType,
-  });
+  const bt = d.findPackage("boost-unit_test_framework");
 
-  const test = clang.link({
+  d.addTest({
     name: "msgstream_test",
-    runtime: "c++",
-    linkType: "executable",
-    binaries: [
-      clang.compile("test/msgstream_test.cpp", { extraFlags: btCflags }),
-      lib,
-    ],
-    extraFlags: btLibs,
+    src: ["test/msgstream_test.cpp"],
+    linkTo: [msg, bt],
   });
 
-  const runTest = Path.build("run-test");
-  make.add(runTest, [test], (args) => {
-    return args.spawn(args.abs(test));
-  });
+  make.add("test", [d.test], () => {});
 
-  make.add("all", [runTest, clang.compileCommands()]);
+  const compileCommands = addCompileCommands(make, d);
+
+  make.add("all", [d.test, compileCommands]);
 });
