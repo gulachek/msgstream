@@ -2,6 +2,5 @@
 build
 *.swp
 node_modules
-pkgconfig
-conan
 config.json
+vendor
