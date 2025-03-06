@@ -5,8 +5,7 @@
  * license that can be found in the LICENSE file or at
  * https://opensource.org/licenses/MIT.
  */
-#define BOOST_TEST_MODULE example
-#include <boost/test/unit_test.hpp>
+#include <gtest/gtest.h>
 
 #include "msgstream.h"
 
@@ -22,31 +21,32 @@
 using std::size_t;
 using std::uint8_t;
 
-BOOST_AUTO_TEST_CASE(OkIsFalsy) { BOOST_TEST(!MSGSTREAM_OK); }
+TEST(MsgStream, OkIsFalsy) { EXPECT_FALSE(MSGSTREAM_OK); }
 
-BOOST_AUTO_TEST_CASE(ErrNameOk) {
+TEST(MsgStream, ErrNameOk) {
   std::string_view nm{msgstream_errname(MSGSTREAM_OK)};
-  BOOST_TEST(nm == "MSGSTREAM_OK");
+  EXPECT_EQ(nm, "MSGSTREAM_OK");
 }
 
-BOOST_AUTO_TEST_CASE(ErrStrOk) {
+TEST(MsgStream, ErrStrOk) {
   std::string_view str{msgstream_errstr(MSGSTREAM_OK)};
-  BOOST_TEST(str == "no error detected");
+  EXPECT_EQ(str, "no error detected");
 }
 
-struct f {
-  f() {
+class f : public testing::Test {
+protected:
+  void SetUp() override {
     int fds[2];
     if (pipe(fds) == -1) {
       perror("pipe");
-      BOOST_FAIL("Failed to allocate pipe");
+      ADD_FAILURE() << "Failed to allocate pipe";
     }
 
     read_ = fds[0];
     write_ = fds[1];
   }
 
-  ~f() {
+  void TearDown() override {
     close(read_);
     close(write_);
   }
@@ -55,62 +55,62 @@ struct f {
   int write_;
 };
 
-BOOST_FIXTURE_TEST_CASE(TransferSingleByte, f) {
+TEST_F(f, TransferSingleByte) {
   int8_t b42 = 42, recv = 0;
   auto ec = msgstream_fd_send(write_, &b42, sizeof(b42), 1);
-  BOOST_TEST(!ec);
+  EXPECT_FALSE(ec);
 
   size_t size = 0;
   ec = msgstream_fd_recv(read_, &recv, sizeof(recv), &size);
-  BOOST_TEST(!ec);
+  EXPECT_FALSE(ec);
 
-  BOOST_TEST(size == 1);
-  BOOST_TEST(recv == 42);
+  EXPECT_EQ(size, 1);
+  EXPECT_EQ(recv, 42);
 }
 
-BOOST_FIXTURE_TEST_CASE(EofIsDistinctError, f) {
+TEST_F(f, EofIsDistinctError) {
   int8_t recv = 0;
   close(write_);
   size_t size = 1;
   auto ec = msgstream_fd_recv(read_, &recv, sizeof(recv), &size);
 
-  BOOST_TEST(ec == MSGSTREAM_EOF);
-  BOOST_TEST(size == 0);
+  EXPECT_EQ(ec, MSGSTREAM_EOF);
+  EXPECT_EQ(size, 0);
 }
 
-BOOST_FIXTURE_TEST_CASE(TransferEmptyMsg, f) {
+TEST_F(f, TransferEmptyMsg) {
   int8_t b42 = 42, recv = 96;
   auto ec = msgstream_fd_send(write_, &b42, sizeof(b42), 0);
-  BOOST_TEST(!ec);
+  EXPECT_FALSE(ec);
 
   size_t size = 1;
   ec = msgstream_fd_recv(read_, &recv, sizeof(recv), &size);
-  BOOST_TEST(!ec);
-  BOOST_TEST(size == 0);
+  EXPECT_FALSE(ec);
+  EXPECT_EQ(size, 0);
 
-  BOOST_TEST(recv == 96); // no change
+  EXPECT_EQ(recv, 96); // no change
 }
 
-BOOST_FIXTURE_TEST_CASE(TransferStringHello, f) {
+TEST_F(f, TransferStringHello) {
   char hello[9] = "hello", recv[9] = {};
   size_t len = strlen(hello);
 
   auto ec = msgstream_fd_send(write_, hello, sizeof(hello), len);
-  BOOST_TEST(!ec);
+  EXPECT_FALSE(ec);
 
   size_t size = 0;
   ec = msgstream_fd_recv(read_, recv, sizeof(recv), &size);
-  BOOST_TEST(!ec);
-  BOOST_TEST(size == len);
+  EXPECT_FALSE(ec);
+  EXPECT_EQ(size, len);
 
   std::string_view recv_sv{recv, recv + size};
-  BOOST_TEST(recv_sv == "hello");
+  EXPECT_EQ(recv_sv, "hello");
 }
 
 #undef HUGE
 #define HUGE 0x12345
 
-BOOST_FIXTURE_TEST_CASE(TransferHugeMessage, f) {
+TEST_F(f, TransferHugeMessage) {
   uint8_t huge[HUGE], recv[HUGE] = {};
 
   for (size_t i = 0; i < HUGE; ++i)
@@ -123,9 +123,9 @@ BOOST_FIXTURE_TEST_CASE(TransferHugeMessage, f) {
   auto rret = msgstream_fd_recv(read_, recv, HUGE, &size);
   th.join();
 
-  BOOST_TEST(rret == MSGSTREAM_OK);
-  BOOST_TEST(sret == MSGSTREAM_OK);
-  BOOST_TEST(size == HUGE);
+  EXPECT_EQ(rret, MSGSTREAM_OK);
+  EXPECT_EQ(sret, MSGSTREAM_OK);
+  EXPECT_EQ(size, HUGE);
 
   for (size_t i = 0; i < HUGE; ++i) {
     if (recv[i] != (i % 256)) {
@@ -133,12 +133,10 @@ BOOST_FIXTURE_TEST_CASE(TransferHugeMessage, f) {
       os << "Failed to read byte at index " << i << ". Expected " << (i % 256)
          << " but received " << recv[i];
 
-      BOOST_FAIL(os.str());
+      FAIL() << os.str();
     }
   }
 }
-
-BOOST_AUTO_TEST_SUITE(header_size)
 
 #define EXPAND(X) X
 
@@ -146,133 +144,121 @@ BOOST_AUTO_TEST_SUITE(header_size)
   {                                                                            \
     size_t b##BUF_SZ;                                                          \
     int ec = msgstream_header_size(BUF_SZ, &EXPAND(b##BUF_SZ));                \
-    BOOST_TEST(!ec);                                                           \
-    BOOST_TEST(EXPAND(b##BUF_SZ) == RET);                                      \
+    EXPECT_FALSE(ec);                                                          \
+    EXPECT_EQ(EXPAND(b##BUF_SZ), RET);                                         \
   }
 
-BOOST_AUTO_TEST_CASE(EmptyBufferIsMeaninglessAndErrors) {
+TEST(HeaderSize, EmptyBufferIsMeaninglessAndErrors) {
   size_t n = 1;
   int ec = msgstream_header_size(0, &n);
-  BOOST_TEST(ec == MSGSTREAM_SMALL_BUF);
+  EXPECT_EQ(ec, MSGSTREAM_SMALL_BUF);
 }
 
-BOOST_AUTO_TEST_CASE(TwoByteHeader){DO_TEST(0x1, 2) DO_TEST(0xff, 2)}
+TEST(HeaderSize, TwoByteHeader){DO_TEST(0x1, 2) DO_TEST(0xff, 2)}
 
-BOOST_AUTO_TEST_CASE(ThreeByteHeader){DO_TEST(0x100, 3) DO_TEST(0xffff, 3)}
+TEST(HeaderSize, ThreeByteHeader){DO_TEST(0x100, 3) DO_TEST(0xffff, 3)}
 
-BOOST_AUTO_TEST_CASE(FourByteHeader){DO_TEST(0x10000, 4) DO_TEST(0xffffff, 4)}
+TEST(HeaderSize, FourByteHeader){DO_TEST(0x10000, 4) DO_TEST(0xffffff, 4)}
 
-BOOST_AUTO_TEST_CASE(FiveByteHeader){DO_TEST(0x1000000, 5)
-                                         DO_TEST(0xffffffff, 5)}
+TEST(HeaderSize, FiveByteHeader){DO_TEST(0x1000000, 5) DO_TEST(0xffffffff, 5)}
 
-BOOST_AUTO_TEST_CASE(SixByteHeader){DO_TEST(0x100000000, 6)
-                                        DO_TEST(0xffffffffff, 6)}
+TEST(HeaderSize,
+     SixByteHeader){DO_TEST(0x100000000, 6) DO_TEST(0xffffffffff, 6)}
 
-BOOST_AUTO_TEST_CASE(SevenByteHeader){DO_TEST(0x10000000000, 7)
-                                          DO_TEST(0xffffffffffff, 7)}
+TEST(HeaderSize,
+     SevenByteHeader){DO_TEST(0x10000000000, 7) DO_TEST(0xffffffffffff, 7)}
 
-BOOST_AUTO_TEST_CASE(EightByteHeader){DO_TEST(0x1000000000000, 8)
-                                          DO_TEST(0xffffffffffffff, 8)}
+TEST(HeaderSize,
+     EightByteHeader){DO_TEST(0x1000000000000, 8) DO_TEST(0xffffffffffffff, 8)}
 
-BOOST_AUTO_TEST_CASE(NineByteHeader){DO_TEST(0x100000000000000, 9)
-                                         DO_TEST(0xffffffffffffffff, 9)}
+TEST(HeaderSize, NineByteHeader){DO_TEST(0x100000000000000, 9)
+                                     DO_TEST(0xffffffffffffffff, 9)}
 
 #undef EXPAND
 #undef DO_TEST
 
-BOOST_AUTO_TEST_SUITE_END() // header_size
-
-    BOOST_AUTO_TEST_SUITE(EncodeHeader)
-
-        BOOST_AUTO_TEST_CASE(EmptyBufferIsMeaninglessAndErrors) {
+TEST(EncodeHeader, EmptyBufferIsMeaninglessAndErrors) {
   uint8_t header_buf[MSGSTREAM_HEADER_BUF_SIZE];
   auto ec = msgstream_encode_header(0, 0, header_buf);
-  BOOST_TEST(ec == MSGSTREAM_SMALL_HDR);
+  EXPECT_EQ(ec, MSGSTREAM_SMALL_HDR);
 }
 
-BOOST_AUTO_TEST_CASE(MsgSizeLargerThanBufSizeIsError) {
+TEST(EncodeHeader, MsgSizeLargerThanBufSizeIsError) {
   uint8_t header_buf[MSGSTREAM_HEADER_BUF_SIZE];
   auto ec = msgstream_encode_header(0xffff, 2, header_buf);
-  BOOST_TEST(ec == MSGSTREAM_BIG_MSG);
+  EXPECT_EQ(ec, MSGSTREAM_BIG_MSG);
 }
 
-BOOST_AUTO_TEST_CASE(EncodesSingleByteMessageHeaderAsTwoBytes) {
+TEST(EncodeHeader, EncodesSingleByteMessageHeaderAsTwoBytes) {
   char header_buf[MSGSTREAM_HEADER_BUF_SIZE];
   size_t hdr_size = 2;
   auto ec = msgstream_encode_header(1, hdr_size, header_buf);
-  BOOST_TEST(!ec);
+  EXPECT_FALSE(ec);
 
   std::string_view header{header_buf, header_buf + hdr_size};
-  BOOST_TEST(header == "\x02\x01");
+  EXPECT_EQ(header, "\x02\x01");
 }
 
-BOOST_AUTO_TEST_CASE(EncodesMultiByteHeaderWithLittleEndianMsgSize) {
+TEST(EncodeHeader, EncodesMultiByteHeaderWithLittleEndianMsgSize) {
   char header_buf[MSGSTREAM_HEADER_BUF_SIZE];
   size_t hdr_size = 5;
   auto ec = msgstream_encode_header(0x04030201, hdr_size, header_buf);
-  BOOST_TEST(!ec);
+  EXPECT_FALSE(ec);
 
   std::string_view header{header_buf, header_buf + hdr_size};
-  BOOST_TEST(header == "\x05\x01\x02\x03\x04");
+  EXPECT_EQ(header, "\x05\x01\x02\x03\x04");
 }
 
-BOOST_AUTO_TEST_CASE(EncodesNineByteHeaderWithLittleEndianMsgSize) {
+TEST(EncodeHeader, EncodesNineByteHeaderWithLittleEndianMsgSize) {
   char header_buf[MSGSTREAM_HEADER_BUF_SIZE];
   size_t hdr_size = 9;
   auto ec = msgstream_encode_header(0x0807060504030201, hdr_size, header_buf);
-  BOOST_TEST(!ec);
+  EXPECT_FALSE(ec);
 
   std::string_view header{header_buf, header_buf + hdr_size};
-  BOOST_TEST(header == "\x09\x01\x02\x03\x04\x05\x06\x07\x08");
+  EXPECT_EQ(header, "\x09\x01\x02\x03\x04\x05\x06\x07\x08");
 }
-BOOST_AUTO_TEST_SUITE_END() // encode_header
 
-BOOST_AUTO_TEST_SUITE(DecodeHeader)
-
-BOOST_AUTO_TEST_CASE(FirstByteMismatchWithHeaderSizeIsError) {
+TEST(DecodeHeader, FirstByteMismatchWithHeaderSizeIsError) {
   uint8_t header_buf[] = {0x01, 0x02}; // header size first byte is invalid
   size_t n = 0;
   auto ec = msgstream_decode_header(header_buf, sizeof(header_buf), &n);
-  BOOST_TEST(ec == MSGSTREAM_HDR_SYNC);
+  EXPECT_EQ(ec, MSGSTREAM_HDR_SYNC);
 }
 
-BOOST_AUTO_TEST_CASE(ReturnsEmptyMessageSizeAsZero) {
+TEST(DecodeHeader, ReturnsEmptyMessageSizeAsZero) {
   uint8_t header_buf[] = {0x02, 0x00};
   size_t n = 1;
   auto ec = msgstream_decode_header(header_buf, sizeof(header_buf), &n);
-  BOOST_TEST(!ec);
-  BOOST_TEST(n == 0);
+  EXPECT_FALSE(ec);
+  EXPECT_EQ(n, 0);
 }
 
-BOOST_AUTO_TEST_CASE(ReturnsSingleByteMessageSize) {
+TEST(DecodeHeader, ReturnsSingleByteMessageSize) {
   uint8_t header_buf[] = {0x02, 0xa1};
   size_t n = 0;
   auto ec = msgstream_decode_header(header_buf, sizeof(header_buf), &n);
-  BOOST_TEST(!ec);
-  BOOST_TEST(n == 0xa1);
+  EXPECT_FALSE(ec);
+  EXPECT_EQ(n, 0xa1);
 }
 
-BOOST_AUTO_TEST_CASE(ReturnsFourByteMessageSizeFromLittleEndian) {
+TEST(DecodeHeader, ReturnsFourByteMessageSizeFromLittleEndian) {
   uint8_t header_buf[] = {0x05, 0x01, 0x02, 0x03, 0x04};
   size_t n = 0;
   auto ec = msgstream_decode_header(header_buf, sizeof(header_buf), &n);
-  BOOST_TEST(!ec);
-  BOOST_TEST(n == 0x04030201);
+  EXPECT_FALSE(ec);
+  EXPECT_EQ(n, 0x04030201);
 }
 
-BOOST_AUTO_TEST_CASE(ReturnsEightByteMessageSizeFromLittleEndian) {
+TEST(DecodeHeader, ReturnsEightByteMessageSizeFromLittleEndian) {
   uint8_t header_buf[] = {0x09, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
   size_t n = 0;
   auto ec = msgstream_decode_header(header_buf, sizeof(header_buf), &n);
-  BOOST_TEST(!ec);
-  BOOST_TEST(n == 0x0807060504030201);
+  EXPECT_FALSE(ec);
+  EXPECT_EQ(n, 0x0807060504030201);
 }
 
-BOOST_AUTO_TEST_SUITE_END()
-
-BOOST_AUTO_TEST_SUITE(IncrementalRead)
-
-BOOST_FIXTURE_TEST_CASE(DecodesOneByteAtATime, f) {
+TEST_F(f, DecodesOneByteAtATime) {
   constexpr size_t bufsz = 512;
   uint8_t recv[bufsz], send[bufsz];
 
@@ -285,13 +271,13 @@ BOOST_FIXTURE_TEST_CASE(DecodesOneByteAtATime, f) {
   uint8_t hdr_buf[MSGSTREAM_HEADER_BUF_SIZE];
   size_t hdr_size;
   int ec = msgstream_header_size(msgsz, &hdr_size);
-  BOOST_ASSERT(ec == MSGSTREAM_OK);
+  ASSERT_EQ(ec, MSGSTREAM_OK);
 
   ec = msgstream_encode_header(msgsz, hdr_size, hdr_buf);
-  BOOST_ASSERT(ec == MSGSTREAM_OK);
+  ASSERT_EQ(ec, MSGSTREAM_OK);
 
   auto reader = msgstream_incremental_reader_alloc(recv, msgsz);
-  BOOST_ASSERT(reader);
+  ASSERT_TRUE(reader);
 
   int is_complete;
   size_t recv_msg_size;
@@ -301,8 +287,8 @@ BOOST_FIXTURE_TEST_CASE(DecodesOneByteAtATime, f) {
 
     ec = msgstream_fd_incremental_recv(read_, reader, &is_complete,
                                        &recv_msg_size);
-    BOOST_ASSERT(ec == MSGSTREAM_OK);
-    BOOST_ASSERT(!is_complete);
+    ASSERT_EQ(ec, MSGSTREAM_OK);
+    ASSERT_FALSE(is_complete);
   }
 
   for (int i = 0; i < msgsz - 1; ++i) {
@@ -310,31 +296,31 @@ BOOST_FIXTURE_TEST_CASE(DecodesOneByteAtATime, f) {
 
     ec = msgstream_fd_incremental_recv(read_, reader, &is_complete,
                                        &recv_msg_size);
-    BOOST_ASSERT(ec == MSGSTREAM_OK);
-    BOOST_ASSERT(!is_complete);
+    ASSERT_EQ(ec, MSGSTREAM_OK);
+    ASSERT_FALSE(is_complete);
   }
 
   write(write_, &send[msgsz - 1], 1);
   ec = msgstream_fd_incremental_recv(read_, reader, &is_complete,
                                      &recv_msg_size);
 
-  BOOST_TEST(ec == MSGSTREAM_OK);
-  BOOST_TEST(is_complete);
-  BOOST_TEST(recv_msg_size == msgsz);
+  EXPECT_EQ(ec, MSGSTREAM_OK);
+  EXPECT_TRUE(is_complete);
+  EXPECT_EQ(recv_msg_size, msgsz);
 
   for (int i = 0; i < msgsz; ++i) {
-    BOOST_TEST(recv[i] == ((2 * i) % 0x100));
+    EXPECT_EQ(recv[i], ((2 * i) % 0x100));
   }
 
   msgstream_incremental_reader_free(reader);
 }
 
-BOOST_FIXTURE_TEST_CASE(CanReadTwoMessagesInARow, f) {
+TEST_F(f, CanReadTwoMessagesInARow) {
   std::string msg = "hello";
   std::array<char, 32> buf;
 
   auto reader = msgstream_incremental_reader_alloc(buf.data(), buf.size());
-  BOOST_ASSERT(reader);
+  ASSERT_TRUE(reader);
 
   msgstream_fd_send(write_, msg.data(), buf.size(), msg.size() + 1);
 
@@ -342,12 +328,12 @@ BOOST_FIXTURE_TEST_CASE(CanReadTwoMessagesInARow, f) {
   size_t msgsz;
   do {
     int ec = msgstream_fd_incremental_recv(read_, reader, &is_complete, &msgsz);
-    BOOST_ASSERT(ec == MSGSTREAM_OK);
+    ASSERT_EQ(ec, MSGSTREAM_OK);
   } while (!is_complete);
 
   // interpret as C string
   std::string_view hello{buf.data()};
-  BOOST_TEST(hello == "hello");
+  EXPECT_EQ(hello, "hello");
 
   msg = "goodbye";
 
@@ -355,16 +341,16 @@ BOOST_FIXTURE_TEST_CASE(CanReadTwoMessagesInARow, f) {
 
   do {
     int ec = msgstream_fd_incremental_recv(read_, reader, &is_complete, &msgsz);
-    BOOST_ASSERT(ec == MSGSTREAM_OK);
+    ASSERT_EQ(ec, MSGSTREAM_OK);
   } while (!is_complete);
 
   std::string_view goodbye{buf.data()};
-  BOOST_TEST(goodbye == "goodbye");
+  EXPECT_EQ(goodbye, "goodbye");
 
   msgstream_incremental_reader_free(reader);
 }
 
-BOOST_FIXTURE_TEST_CASE(MisMatchBufSizeIsError, f) {
+TEST_F(f, MisMatchBufSizeIsError) {
   uint8_t b1 = 1;
   std::array<uint8_t, 0x10000> buf;
   auto reader = msgstream_incremental_reader_alloc(buf.data(), buf.size());
@@ -374,28 +360,26 @@ BOOST_FIXTURE_TEST_CASE(MisMatchBufSizeIsError, f) {
   // the 3 bytes assuming the header is ok.
 
   int ec = msgstream_fd_send(write_, &b1, 1, 1);
-  BOOST_ASSERT(ec == MSGSTREAM_OK);
+  ASSERT_EQ(ec, MSGSTREAM_OK);
 
   int is_complete;
   size_t msg_size;
   ec = msgstream_fd_incremental_recv(read_, reader, &is_complete, &msg_size);
 
-  BOOST_TEST(ec == MSGSTREAM_HDR_SYNC);
+  EXPECT_EQ(ec, MSGSTREAM_HDR_SYNC);
 }
 
-BOOST_FIXTURE_TEST_CASE(NoDataOnNonBlockingFdIsNotError, f) {
+TEST_F(f, NoDataOnNonBlockingFdIsNotError) {
   std::array<uint8_t, 512> buf;
   auto reader = msgstream_incremental_reader_alloc(buf.data(), buf.size());
 
-  BOOST_ASSERT(fcntl(read_, F_SETFL, O_NONBLOCK) != -1);
+  ASSERT_FALSE(fcntl(read_, F_SETFL, O_NONBLOCK) == -1);
 
   int is_complete;
   size_t msg_size;
   int ec =
       msgstream_fd_incremental_recv(read_, reader, &is_complete, &msg_size);
 
-  BOOST_TEST(ec == MSGSTREAM_OK);
-  BOOST_TEST(!is_complete);
+  EXPECT_EQ(ec, MSGSTREAM_OK);
+  EXPECT_FALSE(is_complete);
 }
-
-BOOST_AUTO_TEST_SUITE_END()

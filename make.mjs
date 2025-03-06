@@ -43,12 +43,12 @@ cli((make) => {
   const err = Path.gen(errcC, { ext: ".o" });
   make.add(err, [errcH]);
 
-  const bt = d.findPackage("boost-unit_test_framework");
+  const gtest = d.findPackage("gtest_main");
 
   d.addTest({
     name: "msgstream_test",
     src: ["test/msgstream_test.cpp"],
-    linkTo: [msg, bt],
+    linkTo: [msg, gtest],
   });
 
   make.add("test", [d.test], () => {});
