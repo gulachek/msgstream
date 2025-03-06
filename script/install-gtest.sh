@@ -5,19 +5,11 @@ if [ ! -f script/install-gtest.sh ]; then
 	exit 1
 fi
 
-function md {
-	if [ ! -d "$1" ]; then
-		mkdir "$1"
-	fi
-}
+. script/util.sh
 
 ARCHIVE="https://github.com/google/googletest/archive/refs/heads/main.tar.gz"
-VENDOR="vendor"
-SRC="$VENDOR/src"
-GTEST="$SRC/googletest"
+GTEST="$VENDORSRC/googletest"
 
-md "$VENDOR"
-md "$SRC"
 md "$GTEST"
 
 pushd "$GTEST"

@@ -18,3 +18,5 @@ jobs:
           node-version: 22.x
       - run: npm ci
       - run: node make.mjs test
+      - name: Test Distribution
+        run: script/test-release.sh
