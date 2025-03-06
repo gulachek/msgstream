@@ -1,8 +1,8 @@
-set path=,,src/**,test/**,include/**
+set path=,,src/**,test/**,include/**,.github/workflows
 
 " build
-set makeprg=node\ make.js
-nnoremap <Leader>b :!node make.js<CR>
+set makeprg=node\ make.mjs
+nnoremap <Leader>b :!node make.mjs<CR>
 
 augroup msgstream
 	autocmd!
