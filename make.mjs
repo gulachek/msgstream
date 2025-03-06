@@ -7,6 +7,8 @@ import { Distribution, addCompileCommands } from "esmakefile-cmake";
 const require = createRequire(import.meta.url);
 const nunjucks = require("nunjucks");
 
+const { version } = require("./package.json");
+
 function addRenderWithErrorCodes(make, dest, srcRaw) {
   const src = Path.src(srcRaw);
   make.add(dest, [src], async (args) => {
@@ -28,7 +30,7 @@ cli((make) => {
 
   const d = new Distribution(make, {
     name: "msgstream",
-    version: "0.1.0",
+    version,
     cStd: 11,
     cxxStd: 20,
   });
