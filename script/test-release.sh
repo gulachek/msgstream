@@ -10,16 +10,21 @@ fi
 
 . script/util.sh
 
-node make.mjs dist-msgstream
 
 VERSION="$(jq -r .version package.json)"
 SRC="$PWD"
 BUILD="$SRC/build"
+DIST="$(realpath ${1:-$BUILD/msgstream-$VERSION.tgz})"
+
+if [ ! -f "$DIST" ]; then
+	echo "$DIST doesn't exist"
+	exit 1
+fi
 
 MSGSTREAM="$VENDORSRC/msgstream"
 md "$MSGSTREAM"
 
-untar -d "$MSGSTREAM" -f "$BUILD/msgstream-$VERSION.tgz"
+untar -d "$MSGSTREAM" -f "$DIST"
 
 cmake -S "$MSGSTREAM" -B "$MSGSTREAM/build"
 cmake --build "$MSGSTREAM/build"
