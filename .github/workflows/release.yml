@@ -21,7 +21,11 @@ jobs:
           name: msgstream-tarball
           path: build/msgstream-*.tgz
   test-package:
-    runs-on: [ubuntu-latest, macos-latest]
+    needs: package
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
