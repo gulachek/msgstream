@@ -1,4 +1,4 @@
-set path=,,src/**,test/**,include/**,.github/workflows
+set path=,,src/**,test/**,include/**,.github/workflows,script
 
 " build
 set makeprg=node\ make.mjs

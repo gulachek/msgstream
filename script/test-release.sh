@@ -13,15 +13,13 @@ fi
 node make.mjs dist-msgstream
 
 VERSION="$(jq -r .version package.json)"
-SRC="$(pwd)"
+SRC="$PWD"
 BUILD="$SRC/build"
 
 MSGSTREAM="$VENDORSRC/msgstream"
 md "$MSGSTREAM"
 
-pushd "$MSGSTREAM"
-tar xfz "$BUILD/msgstream-$VERSION.tgz" --strip-components=1
-popd
+untar -d "$MSGSTREAM" -f "$BUILD/msgstream-$VERSION.tgz"
 
 cmake -S "$MSGSTREAM" -B "$MSGSTREAM/build"
 cmake --build "$MSGSTREAM/build"

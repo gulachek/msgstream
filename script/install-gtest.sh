@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -x
+
 if [ ! -f script/install-gtest.sh ]; then
 	echo "Please run from project root!"
 	exit 1
@@ -12,9 +14,7 @@ GTEST="$VENDORSRC/googletest"
 
 md "$GTEST"
 
-pushd "$GTEST"
-curl -L "$ARCHIVE" | tar xz --strip-components=1
-popd
+untar -d "$GTEST" -u "$ARCHIVE"
 
 cmake -DBUILD_GMOCK=OFF "-DCMAKE_INSTALL_PREFIX=$VENDOR" -S "$GTEST" -B "$GTEST/build"
 cmake --build "$GTEST/build"
