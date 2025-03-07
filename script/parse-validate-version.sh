@@ -1,6 +1,6 @@
 #!/bin/sh
 
-if [ ! -f script/validate-ref.sh ]; then
+if [ ! -f package.json ]; then
 	echo "Please run $0 from project root!"
 	exit 1
 fi
