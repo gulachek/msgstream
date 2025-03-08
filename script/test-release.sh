@@ -3,18 +3,19 @@
 set -e
 set -x
 
-if [ ! -f script/test-release.sh ]; then
+if [ ! -f package.json ]; then
 	echo "Please run from project root!"
 	exit 1
 fi
 
 . script/util.sh
 
-
+DIST="$(realpath ${1:?Usage: $0 <msgstream-x.x.x.tgz>})"
 VERSION="$(jq -r .version package.json)"
-SRC="$PWD"
-BUILD="$SRC/build"
-DIST="$(realpath ${1:-$BUILD/msgstream-$VERSION.tgz})"
+if [ "$(basename $DIST)" != "msgstream-$VERSION.tgz" ]; then
+	echo "Unexpected tarball '$DIST' given to $0"
+	exit 1
+fi
 
 if [ ! -f "$DIST" ]; then
 	echo "$DIST doesn't exist"
@@ -30,7 +31,7 @@ cmake -S "$MSGSTREAM" -B "$MSGSTREAM/build"
 cmake --build "$MSGSTREAM/build"
 cmake --install "$MSGSTREAM/build" --prefix "$VENDOR"
 
-TEST="$SRC/test/release"
+TEST="$PWD/test/release"
 
 echo "Testing pkgconfig"
 rm -rf "$TEST/build"
