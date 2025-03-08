@@ -12,3 +12,6 @@ if [ "$PUBLISH_VERSION" != "$PACKAGE_VERSION" ]; then
 	echo "Version in GITHUB_REF '$GITHUB_REF' does not match package.json version $PACKAGE_VERSION"
 	exit 1
 fi
+
+# We now know this is the same
+VERSION="$PACKAGE_VERSION"

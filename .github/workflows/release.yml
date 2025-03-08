@@ -36,3 +36,16 @@ jobs:
         with:
           name: msgstream-tarball
       - run: script/test-release.sh msgstream-*.tgz
+  upload-package:
+    needs: test-package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: msgstream-tarball
+      - run: script/upload-package.sh msgstream-*.tgz
