@@ -30,6 +30,3 @@ untar -f "$VENDORSRC/gtest-download.tgz" -d "$GTEST"
 cmake -DBUILD_GMOCK=OFF "-DCMAKE_INSTALL_PREFIX=$VENDOR" -S "$GTEST" -B "$GTEST/build"
 cmake --build "$GTEST/build"
 cmake --install "$GTEST/build"
-
-# Test to see if conan exists in GitHub runner
-which conan
