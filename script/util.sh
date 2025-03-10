@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 md() {
 	if [ ! -d "$1" ]; then

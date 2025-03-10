@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 if [ ! -f package.json ]; then
 	echo "Please run $0 from project root!"
